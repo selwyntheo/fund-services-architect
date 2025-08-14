@@ -1,0 +1,14 @@
+# Backend API Server Dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+aiohttp==3.9.1
+GitPython==3.1.40
+PyYAML==6.0.1
+
+# Optional dependencies for enhanced analysis
+radon==6.0.1
+bandit==1.7.5
+safety==2.3.5
+pylint==3.0.3
+black==23.11.0
