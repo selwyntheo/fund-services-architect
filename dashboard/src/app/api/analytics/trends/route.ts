@@ -1,52 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Generate mock trend data
-function generateTrendData(days: number) {
-  const data = [];
-  const currentDate = new Date();
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(currentDate);
-    date.setDate(date.getDate() - i);
-    
-    // Generate realistic trend data with some variation
-    const baseScore = 5.5 + Math.sin(i * 0.1) * 0.5;
-    const variation = (Math.random() - 0.5) * 0.8;
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      overall_score: Math.max(1, Math.min(10, baseScore + variation)),
-      total_debt_hours: Math.floor(150 + Math.sin(i * 0.15) * 30 + Math.random() * 40),
-      critical_issues: Math.floor(3 + Math.random() * 5),
-      projects_scanned: Math.floor(8 + Math.random() * 4),
-      categories: {
-        code_debt: Math.max(1, Math.min(10, baseScore + variation * 1.2)),
-        architecture_debt: Math.max(1, Math.min(10, baseScore + variation * 0.8)),
-        infrastructure_debt: Math.max(1, Math.min(10, baseScore + variation * 0.6))
-      }
-    });
-  }
-  
-  return data;
-}
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const days = parseInt(searchParams.get('days') || '90');
-  const projects = searchParams.get('projects')?.split(',').map(id => parseInt(id));
+  try {
+    const { searchParams } = new URL(request.url);
+    const days = searchParams.get('days') || '90';
+    const projects = searchParams.get('projects') || '';
+    
+    // Forward the request to the backend API
+    const response = await fetch(`${BACKEND_URL}/api/analytics/trends?days=${days}&projects=${projects}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  const trendData = generateTrendData(days);
-
-  // If specific projects are requested, you could filter or modify the data
-  // For now, we'll return the same trend data regardless of project filter
-  
-  return NextResponse.json({
-    data: trendData,
-    metadata: {
-      days_requested: days,
-      data_points: trendData.length,
-      projects_filter: projects || null,
-      generated_at: new Date().toISOString()
+    if (!response.ok) {
+      throw new Error(`Backend API error: ${response.status}`);
     }
-  });
+
+    const data = await response.json();
+    
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error fetching trend data:', error);
+    
+    // Return empty data structure instead of mock data
+    return NextResponse.json({
+      data: [],
+      metadata: {
+        days_requested: parseInt(request.nextUrl.searchParams.get('days') || '90'),
+        data_points: 0,
+        projects_filter: null,
+        generated_at: new Date().toISOString()
+      },
+      message: 'No trend data available. Please run a scan first.'
+    });
+  }
 }
+

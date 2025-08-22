@@ -8,6 +8,9 @@ import asyncio
 import json
 import logging
 import uuid
+import subprocess
+import shutil
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -29,6 +32,351 @@ from enhanced_java_dotnet import JavaAnalyzer
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# In-memory storage for scan results
+SCAN_RESULTS_STORE = []
+RECOMMENDATIONS_STORE = []
+
+# Helper functions
+def _get_risk_level_from_score(score: float) -> str:
+    """Convert debt score to risk level"""
+    if score <= 1.0:
+        return 'Low'
+    elif score <= 2.0:
+        return 'Medium'
+    elif score <= 3.0:
+        return 'High'
+    else:
+        return 'Critical'
+
+async def _fetch_github_org_repositories(org_name: str, max_repos: int = 10, include_forks: bool = False) -> List[Dict]:
+    """Fetch repositories from a GitHub organization"""
+    import aiohttp
+    import re
+    
+    # Clean organization name
+    if org_name.startswith('http'):
+        org_name = org_name.split('/')[-1]
+    
+    repositories = []
+    page = 1
+    per_page = min(max_repos, 100)
+    
+    async with aiohttp.ClientSession() as session:
+        while len(repositories) < max_repos:
+            url = f"https://api.github.com/orgs/{org_name}/repos"
+            params = {
+                'page': page,
+                'per_page': per_page,
+                'sort': 'updated',
+                'direction': 'desc'
+            }
+            
+            try:
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        logger.error(f"GitHub API error: {response.status}")
+                        break
+                    
+                    repos = await response.json()
+                    if not repos:
+                        break
+                    
+                    for repo in repos:
+                        if len(repositories) >= max_repos:
+                            break
+                            
+                        # Skip forks if not included
+                        if repo.get('fork', False) and not include_forks:
+                            continue
+                            
+                        # Skip archived repositories
+                        if repo.get('archived', False):
+                            continue
+                            
+                        repositories.append({
+                            'name': repo['name'],
+                            'full_name': repo['full_name'],
+                            'clone_url': repo['clone_url'],
+                            'html_url': repo['html_url'],
+                            'description': repo.get('description', ''),
+                            'language': repo.get('language', ''),
+                            'updated_at': repo['updated_at'],
+                            'size': repo.get('size', 0),
+                            'stargazers_count': repo.get('stargazers_count', 0)
+                        })
+                    
+                    page += 1
+                    
+            except Exception as e:
+                logger.error(f"Error fetching GitHub repositories: {e}")
+                break
+    
+    return repositories
+
+async def _fetch_gitlab_group_projects(gitlab_url: str, group_id: int, access_token: str, 
+                                     max_projects: int = 10, include_archived: bool = False) -> List[Dict]:
+    """Fetch projects from a GitLab group"""
+    import aiohttp
+    
+    projects = []
+    page = 1
+    per_page = min(max_projects, 100)
+    
+    headers = {'PRIVATE-TOKEN': access_token}
+    
+    async with aiohttp.ClientSession() as session:
+        while len(projects) < max_projects:
+            url = f"{gitlab_url}/api/v4/groups/{group_id}/projects"
+            params = {
+                'page': page,
+                'per_page': per_page,
+                'order_by': 'last_activity_at',
+                'sort': 'desc',
+                'include_subgroups': True
+            }
+            
+            try:
+                async with session.get(url, params=params, headers=headers) as response:
+                    if response.status != 200:
+                        logger.error(f"GitLab API error: {response.status}")
+                        break
+                    
+                    repos = await response.json()
+                    if not repos:
+                        break
+                    
+                    for repo in repos:
+                        if len(projects) >= max_projects:
+                            break
+                            
+                        # Skip archived projects if not included
+                        if repo.get('archived', False) and not include_archived:
+                            continue
+                            
+                        projects.append({
+                            'id': repo['id'],
+                            'name': repo['name'],
+                            'path': repo['path'],
+                            'path_with_namespace': repo['path_with_namespace'],
+                            'http_url_to_repo': repo['http_url_to_repo'],
+                            'web_url': repo['web_url'],
+                            'description': repo.get('description', ''),
+                            'last_activity_at': repo.get('last_activity_at', ''),
+                            'default_branch': repo.get('default_branch', 'main')
+                        })
+                    
+                    page += 1
+                    
+            except Exception as e:
+                logger.error(f"Error fetching GitLab projects: {e}")
+                break
+    
+    return projects
+
+async def _scan_single_repository(repo_info: Dict, scan_type: str = "github") -> Dict:
+    """Scan a single repository and return results"""
+    import tempfile
+    import subprocess
+    
+    scan_id = str(uuid.uuid4())
+    project_name = repo_info['name']
+    
+    if scan_type == "github":
+        repository_url = repo_info['clone_url']
+    else:  # gitlab
+        repository_url = repo_info['http_url_to_repo']
+    
+    try:
+        logger.info(f"Scanning repository: {project_name}")
+        
+        # Clone repository to temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_path = Path(temp_dir) / project_name
+            
+            # Clone the repository
+            result = subprocess.run([
+                "git", "clone", repository_url, str(repo_path)
+            ], capture_output=True, text=True, timeout=300)
+            
+            if result.returncode != 0:
+                logger.error(f"Failed to clone {project_name}: {result.stderr}")
+                return {
+                    "scan_id": scan_id,
+                    "status": "failed",
+                    "project_name": project_name,
+                    "repository_url": repository_url,
+                    "error": f"Clone failed: {result.stderr}",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Verify the repository was cloned
+            if not repo_path.exists():
+                return {
+                    "scan_id": scan_id,
+                    "status": "failed",
+                    "project_name": project_name,
+                    "repository_url": repository_url,
+                    "error": "Repository clone failed - directory not created",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # Count files for basic analysis
+            try:
+                all_files = list(repo_path.rglob("*"))
+                file_count = len([f for f in all_files if f.is_file()])
+                
+                basic_analysis = {
+                    "total_files": file_count,
+                    "repository_size": sum(f.stat().st_size for f in all_files if f.is_file()),
+                    "file_types": {},
+                    "directories": len([f for f in all_files if f.is_dir()]),
+                }
+                
+                # Count file types
+                for file_path in all_files:
+                    if file_path.is_file():
+                        ext = file_path.suffix.lower()
+                        basic_analysis["file_types"][ext] = basic_analysis["file_types"].get(ext, 0) + 1
+                
+                # Try advanced analysis
+                try:
+                    # Initialize analyzers
+                    code_analyzer = CodeAnalyzer(temp_dir)
+                    debt_calculator = DebtScoreCalculator()
+                    
+                    # Create project info
+                    project_info = ProjectInfo(
+                        id=repo_info.get('id', 1),
+                        name=project_name,
+                        path=str(repo_path),
+                        web_url=repository_url,
+                        default_branch=repo_info.get('default_branch', 'main'),
+                        last_activity_at=repo_info.get('updated_at', repo_info.get('last_activity_at', datetime.now().isoformat()))
+                    )
+                    
+                    # Run code analysis
+                    code_metrics = await code_analyzer.analyze_code_quality(repo_path)
+                    
+                    # Calculate basic debt score
+                    all_metrics = {
+                        'code_analysis': code_metrics,
+                        'architecture_analysis': {"score": 7.0, "issues": []},
+                        'infrastructure_analysis': {"score": 7.0, "issues": []},
+                        'operations_analysis': {"score": 7.0, "issues": []}
+                    }
+                    
+                    debt_metrics = debt_calculator.calculate_debt_score(all_metrics)
+                    
+                    # Create scan result
+                    scan_result = {
+                        "scan_id": scan_id,
+                        "status": "completed",
+                        "project_name": project_name,
+                        "repository_url": repository_url,
+                        "debt_metrics": asdict(debt_metrics),
+                        "basic_analysis": basic_analysis,
+                        "detailed_analysis": all_metrics,
+                        "repository_info": repo_info,
+                        "timestamp": datetime.now().isoformat(),
+                        "risk_level": _get_risk_level_from_score(debt_metrics.overall_score)
+                    }
+                    
+                    return scan_result
+                    
+                except Exception as analysis_error:
+                    logger.warning(f"Advanced analysis failed for {project_name}: {analysis_error}")
+                    # Return basic analysis if advanced fails
+                    return {
+                        "scan_id": scan_id,
+                        "status": "completed_basic",
+                        "project_name": project_name,
+                        "repository_url": repository_url,
+                        "basic_analysis": basic_analysis,
+                        "repository_info": repo_info,
+                        "analysis_error": str(analysis_error),
+                        "timestamp": datetime.now().isoformat(),
+                        "risk_level": "Unknown"
+                    }
+                    
+            except Exception as file_error:
+                logger.error(f"File analysis failed for {project_name}: {file_error}")
+                return {
+                    "scan_id": scan_id,
+                    "status": "completed_minimal",
+                    "project_name": project_name,
+                    "repository_url": repository_url,
+                    "repository_info": repo_info,
+                    "error": str(file_error),
+                    "timestamp": datetime.now().isoformat(),
+                    "risk_level": "Unknown"
+                }
+                
+    except Exception as e:
+        logger.error(f"Unexpected error scanning {project_name}: {e}")
+        return {
+            "scan_id": scan_id,
+            "status": "failed",
+            "project_name": project_name,
+            "repository_url": repository_url,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "risk_level": "Unknown"
+        }
+
+def _generate_recommendations_from_metrics(debt_metrics: DebtMetrics, all_metrics: Dict) -> List[Dict]:
+    """Generate recommendations based on debt metrics"""
+    recommendations = []
+    
+    if debt_metrics.code_quality_score < 7.0:
+        recommendations.append({
+            "id": str(uuid.uuid4()),
+            "title": "Improve Code Quality",
+            "description": "Code quality score is below threshold. Consider refactoring complex functions and reducing code duplication.",
+            "priority": "high" if debt_metrics.code_quality_score < 5.0 else "medium",
+            "category": "code_quality",
+            "effort": "high",
+            "impact": "high",
+            "created_at": datetime.now().isoformat()
+        })
+    
+    if debt_metrics.architecture_score < 7.0:
+        recommendations.append({
+            "id": str(uuid.uuid4()),
+            "title": "Review Architecture Patterns",
+            "description": "Architecture score indicates potential design issues. Review coupling and design patterns.",
+            "priority": "medium",
+            "category": "architecture",
+            "effort": "high",
+            "impact": "medium",
+            "created_at": datetime.now().isoformat()
+        })
+    
+    if debt_metrics.infrastructure_score < 7.0:
+        recommendations.append({
+            "id": str(uuid.uuid4()),
+            "title": "Update Infrastructure Configuration",
+            "description": "Infrastructure setup needs improvement. Update dependencies and configuration.",
+            "priority": "medium",
+            "category": "infrastructure",
+            "effort": "medium",
+            "impact": "medium",
+            "created_at": datetime.now().isoformat()
+        })
+    
+    if debt_metrics.operations_score < 7.0:
+        recommendations.append({
+            "id": str(uuid.uuid4()),
+            "title": "Enhance Operational Procedures",
+            "description": "Operational readiness can be improved. Add monitoring and documentation.",
+            "priority": "low",
+            "category": "operations",
+            "effort": "medium",
+            "impact": "low",
+            "created_at": datetime.now().isoformat()
+        })
+    
+    return recommendations
 
 # FastAPI app
 app = FastAPI(
@@ -515,6 +863,521 @@ async def get_code_issues(request: AnalyzeCodebaseRequest):
     """Get code issues and smells"""
     analysis = await tech_debt_api.analyze_codebase(request.project_path)
     return analysis.issues
+
+# Scan endpoints for dashboard integration
+@app.get("/api/scan/results")
+async def get_scan_results(page: int = 1, limit: int = 10):
+    """Get paginated scan results"""
+    # Calculate pagination
+    total = len(SCAN_RESULTS_STORE)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    
+    # Get the paginated results (sorted by timestamp, newest first)
+    sorted_results = sorted(SCAN_RESULTS_STORE, key=lambda x: x["timestamp"], reverse=True)
+    paginated_results = sorted_results[start_idx:end_idx]
+    
+    # Transform results for dashboard compatibility
+    transformed_results = []
+    for result in paginated_results:
+        debt_metrics = result.get("debt_metrics", {})
+        transformed_result = {
+            "id": result["scan_id"],
+            "project_name": result["project_name"],
+            "repository_url": result.get("repository_url", ""),
+            "last_scan": result["timestamp"],
+            "risk_level": result.get("risk_level", "Unknown"),
+            "debt_score": debt_metrics.get("overall_score", 0.0),
+            "code_quality": debt_metrics.get("code_quality_score", 0.0),
+            "architecture": debt_metrics.get("architecture_score", 0.0),
+            "infrastructure": debt_metrics.get("infrastructure_score", 0.0),
+            "operations": debt_metrics.get("operations_score", 0.0),
+            "file_count": result.get("basic_analysis", {}).get("total_files", 0),
+            "status": result["status"]
+        }
+        transformed_results.append(transformed_result)
+    
+    return {
+        "data": transformed_results,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit if total > 0 else 0
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/recommendations")
+async def get_recommendations(priority: str = "", category: str = "", limit: int = 20):
+    """Get debt recommendations"""
+    # Filter recommendations based on query parameters
+    filtered_recommendations = RECOMMENDATIONS_STORE.copy()
+    
+    if priority:
+        filtered_recommendations = [r for r in filtered_recommendations if r.get("priority", "").lower() == priority.lower()]
+    
+    if category:
+        filtered_recommendations = [r for r in filtered_recommendations if r.get("category", "").lower() == category.lower()]
+    
+    # Sort by priority and creation date
+    priority_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    filtered_recommendations.sort(
+        key=lambda x: (priority_order.get(x.get("priority", "low"), 1), x.get("created_at", "")), 
+        reverse=True
+    )
+    
+    # Limit results
+    limited_recommendations = filtered_recommendations[:limit]
+    
+    return {
+        "data": limited_recommendations,
+        "total": len(limited_recommendations),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/analytics/dashboard")
+async def get_dashboard_analytics():
+    """Get dashboard analytics and metrics"""
+    if not SCAN_RESULTS_STORE:
+        return {
+            "total_projects": 0,
+            "avg_debt_score": 0,
+            "critical_projects": 0,
+            "scan_frequency": 0,
+            "total_debt_hours": 0,
+            "message": "No analytics data available. Please run a scan first.",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    # Calculate analytics from stored scan results
+    total_projects = len(SCAN_RESULTS_STORE)
+    debt_scores = [result.get("debt_metrics", {}).get("overall_score", 0) for result in SCAN_RESULTS_STORE]
+    avg_debt_score = sum(debt_scores) / len(debt_scores) if debt_scores else 0
+    
+    # Count projects by risk level
+    critical_projects = len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Critical"])
+    high_risk_projects = len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "High"])
+    medium_risk_projects = len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Medium"])
+    low_risk_projects = len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Low"])
+    
+    # Calculate estimated debt hours (rough estimate based on debt score)
+    total_debt_hours = sum(score * 10 for score in debt_scores)  # 10 hours per debt point
+    
+    return {
+        "total_projects": total_projects,
+        "avg_debt_score": round(avg_debt_score, 2),
+        "critical_projects": critical_projects,
+        "high_risk_projects": high_risk_projects,
+        "medium_risk_projects": medium_risk_projects,
+        "low_risk_projects": low_risk_projects,
+        "scan_frequency": total_projects,  # Simplified metric
+        "total_debt_hours": round(total_debt_hours, 1),
+        "recent_scans": len([r for r in SCAN_RESULTS_STORE if datetime.fromisoformat(r["timestamp"]) > datetime.now() - timedelta(days=7)]),
+        "total_recommendations": len(RECOMMENDATIONS_STORE),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/analytics/trends")
+async def get_trend_analytics(days: int = 90, projects: str = ""):
+    """Get trend analytics data"""
+    if not SCAN_RESULTS_STORE:
+        return {
+            "data": [],
+            "metadata": {
+                "days_requested": days,
+                "data_points": 0,
+                "projects_filter": projects.split(",") if projects else None,
+                "generated_at": datetime.now().isoformat()
+            },
+            "message": "No trend data available. Please run a scan first."
+        }
+    
+    # Filter by date range
+    cutoff_date = datetime.now() - timedelta(days=days)
+    filtered_results = [
+        r for r in SCAN_RESULTS_STORE 
+        if datetime.fromisoformat(r["timestamp"]) > cutoff_date
+    ]
+    
+    # Filter by projects if specified
+    if projects:
+        project_list = [p.strip() for p in projects.split(",")]
+        filtered_results = [
+            r for r in filtered_results 
+            if r["project_name"] in project_list
+        ]
+    
+    # Generate trend data points (simplified)
+    trend_data = []
+    for result in sorted(filtered_results, key=lambda x: x["timestamp"]):
+        debt_metrics = result.get("debt_metrics", {})
+        trend_data.append({
+            "date": result["timestamp"],
+            "project_name": result["project_name"],
+            "debt_score": debt_metrics.get("overall_score", 0),
+            "code_quality": debt_metrics.get("code_quality_score", 0),
+            "architecture": debt_metrics.get("architecture_score", 0),
+            "infrastructure": debt_metrics.get("infrastructure_score", 0),
+            "operations": debt_metrics.get("operations_score", 0)
+        })
+    
+    return {
+        "data": trend_data,
+        "metadata": {
+            "days_requested": days,
+            "data_points": len(trend_data),
+            "projects_filter": projects.split(",") if projects else None,
+            "generated_at": datetime.now().isoformat()
+        }
+    }
+
+class GitHubScanRequest(BaseModel):
+    repository_url: str
+    project_name: str
+    enhanced_analysis: bool = True
+
+class GitHubGroupScanRequest(BaseModel):
+    organization_url: str  # e.g., "https://github.com/microsoft" or just "microsoft"
+    project_filter: Optional[str] = ""  # Optional regex pattern to filter project names
+    max_projects: Optional[int] = 10  # Limit number of projects to scan
+    enhanced_analysis: bool = True
+    include_forks: bool = False  # Whether to include forked repositories
+
+class GitLabGroupScanRequest(BaseModel):
+    gitlab_url: str  # e.g., "https://gitlab.com"
+    group_id: int  # GitLab group ID
+    access_token: str  # GitLab API token
+    project_filter: Optional[str] = ""
+    max_projects: Optional[int] = 10
+    enhanced_analysis: bool = True
+    include_archived: bool = False
+
+@app.post("/api/scan/github")
+async def scan_github_repository(request: GitHubScanRequest, background_tasks: BackgroundTasks):
+    """Scan a GitHub repository for technical debt"""
+    scan_id = str(uuid.uuid4())
+    
+    try:
+        import subprocess
+        import shutil
+        import tempfile
+        
+        logger.info(f"Starting GitHub scan for repository: {request.repository_url}")
+        
+        # Clone repository to temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_path = Path(temp_dir) / request.project_name
+            
+            logger.info(f"Cloning repository to: {repo_path}")
+            
+            # Clone the repository
+            result = subprocess.run([
+                "git", "clone", request.repository_url, str(repo_path)
+            ], capture_output=True, text=True, timeout=300)
+            
+            if result.returncode != 0:
+                logger.error(f"Git clone failed: {result.stderr}")
+                raise HTTPException(status_code=400, detail=f"Failed to clone repository: {result.stderr}")
+            
+            logger.info("Repository cloned successfully")
+            
+            # Verify the repository was cloned
+            if not repo_path.exists():
+                raise HTTPException(status_code=500, detail="Repository clone failed - directory not created")
+            
+            # Count files for basic analysis
+            try:
+                all_files = list(repo_path.rglob("*"))
+                file_count = len([f for f in all_files if f.is_file()])
+                logger.info(f"Found {file_count} files in repository")
+                
+                # Simple analysis without complex dependencies
+                basic_analysis = {
+                    "total_files": file_count,
+                    "repository_size": sum(f.stat().st_size for f in all_files if f.is_file()),
+                    "file_types": {},
+                    "directories": len([f for f in all_files if f.is_dir()]),
+                }
+                
+                # Count file types
+                for file_path in all_files:
+                    if file_path.is_file():
+                        ext = file_path.suffix.lower()
+                        basic_analysis["file_types"][ext] = basic_analysis["file_types"].get(ext, 0) + 1
+                
+                # Try advanced analysis if possible
+                try:
+                    logger.info("Attempting advanced analysis...")
+                    
+                    # Initialize analyzers
+                    code_analyzer = CodeAnalyzer(temp_dir)
+                    debt_calculator = DebtScoreCalculator()
+                    
+                    # Create project info
+                    project_info = ProjectInfo(
+                        id=1,
+                        name=request.project_name,
+                        path=str(repo_path),
+                        web_url=request.repository_url,
+                        default_branch="main",
+                        last_activity_at=datetime.now().isoformat()
+                    )
+                    
+                    # Run code analysis
+                    code_metrics = await code_analyzer.analyze_code_quality(repo_path)
+                    logger.info("Code analysis completed")
+                    
+                    # Calculate basic debt score
+                    all_metrics = {
+                        'code_analysis': code_metrics,
+                        'architecture_analysis': {"score": 7.0, "issues": []},
+                        'infrastructure_analysis': {"score": 7.0, "issues": []},
+                        'operations_analysis': {"score": 7.0, "issues": []}
+                    }
+                    
+                    debt_metrics = debt_calculator.calculate_debt_score(all_metrics)
+                    logger.info("Debt calculation completed")
+                    
+                    # Create scan result for storage
+                    scan_result = {
+                        "scan_id": scan_id,
+                        "status": "completed",
+                        "project_name": request.project_name,
+                        "repository_url": request.repository_url,
+                        "debt_metrics": asdict(debt_metrics),
+                        "basic_analysis": basic_analysis,
+                        "detailed_analysis": all_metrics,
+                        "timestamp": datetime.now().isoformat(),
+                        "risk_level": _get_risk_level_from_score(debt_metrics.overall_score)
+                    }
+                    
+                    # Store the scan result
+                    SCAN_RESULTS_STORE.append(scan_result)
+                    
+                    # Generate and store recommendations
+                    recommendations = _generate_recommendations_from_metrics(debt_metrics, all_metrics)
+                    for rec in recommendations:
+                        rec["scan_id"] = scan_id
+                        rec["project_name"] = request.project_name
+                        RECOMMENDATIONS_STORE.append(rec)
+                    
+                    logger.info(f"Stored scan result and {len(recommendations)} recommendations")
+                    
+                    return scan_result
+                    
+                except Exception as analysis_error:
+                    logger.warning(f"Advanced analysis failed: {analysis_error}")
+                    # Return basic analysis if advanced fails
+                    return {
+                        "scan_id": scan_id,
+                        "status": "completed_basic",
+                        "project_name": request.project_name,
+                        "repository_url": request.repository_url,
+                        "basic_analysis": basic_analysis,
+                        "analysis_error": str(analysis_error),
+                        "message": "Advanced analysis failed, returning basic file analysis",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    
+            except Exception as file_error:
+                logger.error(f"File analysis failed: {file_error}")
+                return {
+                    "scan_id": scan_id,
+                    "status": "completed_minimal",
+                    "project_name": request.project_name,
+                    "repository_url": request.repository_url,
+                    "message": "Repository cloned successfully but analysis failed",
+                    "error": str(file_error),
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+    except subprocess.TimeoutExpired:
+        logger.error("Repository clone timed out")
+        raise HTTPException(status_code=408, detail="Repository clone timed out")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Git command failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to clone repository: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error during GitHub scan: {e}")
+        logger.exception("Full exception details:")
+        raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
+
+@app.post("/api/scan/github-organization")
+async def scan_github_organization(request: GitHubGroupScanRequest, background_tasks: BackgroundTasks):
+    """Scan all repositories in a GitHub organization"""
+    try:
+        logger.info(f"Starting GitHub organization scan: {request.organization_url}")
+        
+        # Extract organization name from URL
+        org_name = request.organization_url
+        if org_name.startswith('http'):
+            org_name = org_name.rstrip('/').split('/')[-1]
+        
+        # Fetch repositories from the organization
+        repositories = await _fetch_github_org_repositories(
+            org_name, 
+            request.max_projects, 
+            request.include_forks
+        )
+        
+        if not repositories:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No repositories found for organization '{org_name}' or organization not accessible"
+            )
+        
+        # Filter repositories by name pattern if provided
+        if request.project_filter:
+            import re
+            pattern = re.compile(request.project_filter, re.IGNORECASE)
+            repositories = [repo for repo in repositories if pattern.search(repo['name'])]
+        
+        logger.info(f"Found {len(repositories)} repositories to scan")
+        
+        # Start background scanning
+        background_tasks.add_task(_scan_repositories_batch, repositories, "github")
+        
+        return {
+            "scan_id": str(uuid.uuid4()),
+            "status": "started",
+            "organization": org_name,
+            "repositories_count": len(repositories),
+            "repositories": [{"name": repo["name"], "url": repo["html_url"]} for repo in repositories],
+            "message": f"Started scanning {len(repositories)} repositories in background",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error scanning GitHub organization: {e}")
+        raise HTTPException(status_code=500, detail=f"Organization scan failed: {str(e)}")
+
+@app.post("/api/scan/gitlab-group")
+async def scan_gitlab_group(request: GitLabGroupScanRequest, background_tasks: BackgroundTasks):
+    """Scan all projects in a GitLab group"""
+    try:
+        logger.info(f"Starting GitLab group scan: {request.gitlab_url}/groups/{request.group_id}")
+        
+        # Fetch projects from the GitLab group
+        projects = await _fetch_gitlab_group_projects(
+            request.gitlab_url,
+            request.group_id,
+            request.access_token,
+            request.max_projects,
+            request.include_archived
+        )
+        
+        if not projects:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No projects found for group {request.group_id} or group not accessible"
+            )
+        
+        # Filter projects by name pattern if provided
+        if request.project_filter:
+            import re
+            pattern = re.compile(request.project_filter, re.IGNORECASE)
+            projects = [proj for proj in projects if pattern.search(proj['name'])]
+        
+        logger.info(f"Found {len(projects)} projects to scan")
+        
+        # Start background scanning
+        background_tasks.add_task(_scan_repositories_batch, projects, "gitlab")
+        
+        return {
+            "scan_id": str(uuid.uuid4()),
+            "status": "started",
+            "gitlab_url": request.gitlab_url,
+            "group_id": request.group_id,
+            "projects_count": len(projects),
+            "projects": [{"name": proj["name"], "url": proj["web_url"]} for proj in projects],
+            "message": f"Started scanning {len(projects)} projects in background",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error scanning GitLab group: {e}")
+        raise HTTPException(status_code=500, detail=f"GitLab group scan failed: {str(e)}")
+
+async def _scan_repositories_batch(repositories: List[Dict], scan_type: str = "github"):
+    """Background task to scan multiple repositories"""
+    logger.info(f"Starting batch scan of {len(repositories)} repositories")
+    
+    successful_scans = 0
+    failed_scans = 0
+    
+    for repo in repositories:
+        try:
+            # Scan individual repository
+            scan_result = await _scan_single_repository(repo, scan_type)
+            
+            if scan_result["status"] in ["completed", "completed_basic"]:
+                # Store successful scan results
+                SCAN_RESULTS_STORE.append(scan_result)
+                
+                # Generate and store recommendations if debt metrics available
+                if "debt_metrics" in scan_result:
+                    debt_metrics_dict = scan_result["debt_metrics"]
+                    # Convert dict back to DebtMetrics object for recommendation generation
+                    debt_metrics = DebtMetrics(
+                        overall_score=debt_metrics_dict.get("overall_score", 0),
+                        code_quality_score=debt_metrics_dict.get("code_quality_score", 0),
+                        architecture_score=debt_metrics_dict.get("architecture_score", 0),
+                        infrastructure_score=debt_metrics_dict.get("infrastructure_score", 0),
+                        operations_score=debt_metrics_dict.get("operations_score", 0)
+                    )
+                    
+                    recommendations = _generate_recommendations_from_metrics(
+                        debt_metrics, 
+                        scan_result.get("detailed_analysis", {})
+                    )
+                    
+                    for rec in recommendations:
+                        rec["scan_id"] = scan_result["scan_id"]
+                        rec["project_name"] = scan_result["project_name"]
+                        RECOMMENDATIONS_STORE.append(rec)
+                
+                successful_scans += 1
+                logger.info(f"Successfully scanned: {repo['name']}")
+            else:
+                failed_scans += 1
+                logger.warning(f"Failed to scan: {repo['name']} - {scan_result.get('error', 'Unknown error')}")
+                
+        except Exception as e:
+            failed_scans += 1
+            logger.error(f"Error scanning repository {repo.get('name', 'unknown')}: {e}")
+    
+    logger.info(f"Batch scan completed: {successful_scans} successful, {failed_scans} failed")
+
+@app.get("/api/scan/status")
+async def get_scan_status():
+    """Get current scanning status and statistics"""
+    return {
+        "total_scanned_projects": len(SCAN_RESULTS_STORE),
+        "total_recommendations": len(RECOMMENDATIONS_STORE),
+        "recent_scans": len([
+            r for r in SCAN_RESULTS_STORE 
+            if datetime.fromisoformat(r["timestamp"]) > datetime.now() - timedelta(hours=1)
+        ]),
+        "scan_distribution": {
+            "completed": len([r for r in SCAN_RESULTS_STORE if r["status"] == "completed"]),
+            "completed_basic": len([r for r in SCAN_RESULTS_STORE if r["status"] == "completed_basic"]),
+            "completed_minimal": len([r for r in SCAN_RESULTS_STORE if r["status"] == "completed_minimal"]),
+            "failed": len([r for r in SCAN_RESULTS_STORE if r["status"] == "failed"])
+        },
+        "risk_distribution": {
+            "Critical": len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Critical"]),
+            "High": len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "High"]),
+            "Medium": len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Medium"]),
+            "Low": len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Low"]),
+            "Unknown": len([r for r in SCAN_RESULTS_STORE if r.get("risk_level") == "Unknown"])
+        },
+        "timestamp": datetime.now().isoformat()
+    }
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -1,74 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const mockRecommendations = [
-  {
-    id: "rec_001",
-    priority: "high",
-    category: "security",
-    title: "Implement encryption for sensitive data",
-    description: "Payment data is currently stored in plaintext. Implement AES-256 encryption for all sensitive payment information.",
-    impact: "Compliance with PCI DSS requirements and reduced security risk",
-    affected_projects: ["payment-gateway", "billing-service"],
-    estimated_effort: "3-5 days"
-  },
-  {
-    id: "rec_002", 
-    priority: "high",
-    category: "performance",
-    title: "Optimize database queries",
-    description: "Multiple N+1 query patterns detected across services. Implement eager loading and query optimization.",
-    impact: "Improved response times and reduced database load",
-    affected_projects: ["customer-service-api", "order-service"],
-    estimated_effort: "2-3 days"
-  },
-  {
-    id: "rec_003",
-    priority: "medium",
-    category: "maintainability", 
-    title: "Refactor complex methods",
-    description: "Several methods exceed complexity thresholds. Break down into smaller, more manageable functions.",
-    impact: "Improved code readability and easier testing",
-    affected_projects: ["customer-service-api", "notification-service"],
-    estimated_effort: "1-2 weeks"
-  },
-  {
-    id: "rec_004",
-    priority: "low",
-    category: "documentation",
-    title: "Update API documentation", 
-    description: "API documentation is outdated and missing several endpoints. Update OpenAPI specifications.",
-    impact: "Better developer experience and reduced onboarding time",
-    affected_projects: ["customer-service-api", "payment-gateway"],
-    estimated_effort: "3-4 days"
-  }
-];
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const priority = searchParams.get('priority');
-  const category = searchParams.get('category'); 
-  const limit = parseInt(searchParams.get('limit') || '20');
+  try {
+    const { searchParams } = new URL(request.url);
+    const priority = searchParams.get('priority') || '';
+    const category = searchParams.get('category') || '';
+    const limit = searchParams.get('limit') || '20';
+    
+    // Forward the request to the backend API
+    const response = await fetch(`${BACKEND_URL}/api/recommendations?priority=${priority}&category=${category}&limit=${limit}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  let filteredRecommendations = [...mockRecommendations];
+    if (!response.ok) {
+      throw new Error(`Backend API error: ${response.status}`);
+    }
 
-  // Apply filters
-  if (priority) {
-    filteredRecommendations = filteredRecommendations.filter(
-      rec => rec.priority === priority
-    );
-  }
+    const data = await response.json();
+    
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error fetching recommendations:', error);
+    
+    // Return empty data structure instead of mock data
+    return NextResponse.json({
+      data: [],
+      message: 'No recommendations available. Please run a scan first.',
+      timestamp: new Date().toISOString()
+    });
 
-  if (category) {
-    filteredRecommendations = filteredRecommendations.filter(
-      rec => rec.category === category
-    );
-  }
-
-  // Apply limit
-  filteredRecommendations = filteredRecommendations.slice(0, limit);
-
-  return NextResponse.json({
-    data: filteredRecommendations,
-    total: filteredRecommendations.length
-  });
-}
