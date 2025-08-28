@@ -150,6 +150,23 @@ else
     echo "   Check for type errors in your code"
 fi
 
+# Check for incorrect import paths
+echo ""
+echo "Checking for common import path issues..."
+if grep -r "from ['\"]@lib" src/ 2>/dev/null; then
+    echo "❌ Found incorrect import paths using @lib/ instead of @/lib/"
+    echo "   These need to be fixed manually"
+else
+    echo "✅ No incorrect @lib/ import paths found"
+fi
+
+if grep -r "import.*@lib" src/ 2>/dev/null; then
+    echo "❌ Found incorrect import statements using @lib/"
+    echo "   These should use @/lib/ instead"
+else
+    echo "✅ No incorrect @lib import statements found"
+fi
+
 echo ""
 echo "8. Suggested Fixes"
 echo "-----------------"
@@ -169,6 +186,14 @@ if ! curl -s "$BACKEND_URL" >/dev/null 2>&1; then
     echo "🔧 Fix: Start backend server"
     echo "   cd ../backend"
     echo "   ./start_server.sh"
+fi
+
+# Check for incorrect import paths and suggest fixes
+if grep -r "from ['\"]@lib" src/ 2>/dev/null || grep -r "import.*@lib" src/ 2>/dev/null; then
+    echo "🔧 Fix: Incorrect import paths detected"
+    echo "   Replace @lib/ with @/lib/ in all import statements"
+    echo "   Run this command to fix automatically:"
+    echo "   find src/ -name '*.ts' -o -name '*.tsx' | xargs sed -i '' 's/@lib\//@\/lib\//g'"
 fi
 
 echo ""

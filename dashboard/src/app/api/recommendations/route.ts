@@ -32,4 +32,5 @@ export async function GET(request: NextRequest) {
       message: 'No recommendations available. Please run a scan first.',
       timestamp: new Date().toISOString()
     });
-
+  }
+}

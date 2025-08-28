@@ -77,23 +77,39 @@ NEXT_PUBLIC_APP_VERSION="1.0.0"
 
 ## Common Issues and Solutions
 
-### 1. Path Alias Issues (`@/lib/api` not found)
+### 1. Path Alias Issues (`@/lib/utils` not found)
 
-**Problem:** Getting errors like "Module not found: Can't resolve '@/lib/api'"
+**Problem:** Getting errors like "Module not found: Can't resolve @lib/utils" or "Can't resolve @/lib/api"
 
-**Solution:** This is typically resolved by ensuring:
-- Node modules are properly installed: `npm install`
-- TypeScript configuration is correct (already configured)
-- The import paths use the correct alias format
+**Root Cause:** 
+- Incorrect import paths using `@lib/` instead of `@/lib/`
+- Missing TypeScript configuration
+- Incorrect Node.js/npm version
+
+**Solution:**
+```bash
+# Quick fix - run the automated import fixer
+./fix-imports.sh
+
+# Manual fix if needed
+find src/ -name "*.ts" -o -name "*.tsx" | xargs sed -i 's/@lib\//@\/lib\//g'
+
+# Clean reinstall
+rm -rf node_modules package-lock.json .next
+npm install
+npm run build
+```
 
 **Verify the fix:**
 ```bash
-# Check if the api file exists
-ls src/lib/api.ts
+# Check TypeScript compilation
+npx tsc --noEmit --skipLibCheck
 
-# Reinstall dependencies if needed
-rm -rf node_modules package-lock.json
-npm install
+# Check for incorrect imports
+grep -r "@lib/" src/  # Should return nothing
+
+# Test build
+npm run build
 ```
 
 ### 2. Port Already in Use
