@@ -125,6 +125,45 @@ curl -X POST http://localhost:8000/api/analysis/codebase \\
 - **Testing** - JUnit, pytest, Jest, Go test
 - **Quality Tools** - SonarQube, ESLint, Pylint
 
+## Deployment on Another Machine
+
+### Quick Deployment Guide
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/selwyntheo/fund-services-architect.git
+   cd fund-services-architect
+   ```
+
+2. **Setup backend:**
+   ```bash
+   cd backend
+   ./start_server.sh
+   ```
+
+3. **Setup frontend:**
+   ```bash
+   cd ../dashboard
+   ./setup.sh
+   npm start
+   ```
+
+4. **Access the application:**
+   - Dashboard: http://localhost:3000
+   - API: http://localhost:8000
+
+### Detailed Setup Instructions
+
+For comprehensive deployment instructions, troubleshooting, and configuration options, see:
+- **Frontend Deployment Guide:** [dashboard/DEPLOYMENT.md](dashboard/DEPLOYMENT.md)
+- **Backend Documentation:** [backend/README.md](backend/README.md)
+
+### Common Issues
+
+- **`@/lib/api` import errors:** Run `./troubleshoot.sh` in the dashboard directory
+- **Port conflicts:** Use `npx kill-port 3000` or configure different ports
+- **Backend connection issues:** Verify backend is running and update `NEXT_PUBLIC_BACKEND_URL` in `.env.local`
+
 ## Configuration
 
 ### Backend Configuration
