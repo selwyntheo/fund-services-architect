@@ -41,7 +41,11 @@ export function ScanTrigger() {
       
       setIsScanning(false);
       setShowForm(false);
-      alert(`Scan completed successfully for ${result.project_name}! Check the dashboard for results.`);
+      alert(`Scan completed successfully for ${result.project_name}! 
+      
+✅ Step 7 (Automate Debt Detection) - New scan results available in dashboard.
+      
+Check the dashboard for detailed debt analysis and recommendations.`);
       
       // Refresh the page to show new results
       window.location.reload();

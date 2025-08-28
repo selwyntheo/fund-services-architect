@@ -27,7 +27,7 @@ from gitlab_debt_scanner_agent import (
     CodeAnalyzer, ArchitectureAnalyzer, InfrastructureAnalyzer, 
     OperationalAnalyzer, DebtScoreCalculator
 )
-from enhanced_java_dotnet import JavaAnalyzer
+from enhanced_java_dotnet import JavaAnalyzer, DotNetAnalyzer, EnhancedCodeAnalyzer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +48,97 @@ def _get_risk_level_from_score(score: float) -> str:
         return 'High'
     else:
         return 'Critical'
+
+def _detect_project_type(repo_path: Path) -> str:
+    """Detect the primary project type based on files present"""
+    # Check for Java indicators
+    if list(repo_path.rglob('*.java')) or (repo_path / 'pom.xml').exists() or list(repo_path.glob('**/build.gradle*')):
+        return 'java'
+    
+    # Check for .NET indicators
+    if (list(repo_path.rglob('*.cs')) or 
+        list(repo_path.rglob('*.csproj')) or 
+        list(repo_path.rglob('*.sln')) or
+        (repo_path / 'packages.config').exists()):
+        return 'dotnet'
+    
+    # Check for other languages
+    if list(repo_path.rglob('*.py')):
+        return 'python'
+    
+    if list(repo_path.rglob('*.js')) or list(repo_path.rglob('*.ts')) or (repo_path / 'package.json').exists():
+        return 'javascript'
+    
+    return 'generic'
+
+async def _run_enhanced_analysis(repo_path: Path, temp_dir: str) -> Dict[str, Any]:
+    """Run enhanced analysis using specialized analyzers based on project type"""
+    project_type = _detect_project_type(repo_path)
+    logger.info(f"Detected project type: {project_type}")
+    
+    # Initialize standard analyzers
+    code_analyzer = CodeAnalyzer(temp_dir)
+    debt_calculator = DebtScoreCalculator()
+    
+    # Initialize specialized analyzers based on project type
+    specialized_metrics = {}
+    
+    try:
+        if project_type == 'java':
+            logger.info("Running Java-specific analysis...")
+            java_analyzer = JavaAnalyzer(repo_path)
+            java_metrics = await java_analyzer.analyze_java_project()
+            specialized_metrics['java_analysis'] = java_metrics
+            logger.info("Java analysis completed")
+            
+        elif project_type == 'dotnet':
+            logger.info("Running .NET-specific analysis...")
+            dotnet_analyzer = DotNetAnalyzer(repo_path)
+            dotnet_metrics = await dotnet_analyzer.analyze_dotnet_project()
+            specialized_metrics['dotnet_analysis'] = dotnet_metrics
+            logger.info(".NET analysis completed")
+        
+        # Run general code analysis
+        code_metrics = await code_analyzer.analyze_code_quality(repo_path)
+        
+        # Combine all metrics
+        all_metrics = {
+            'code_analysis': code_metrics,
+            'architecture_analysis': {"score": 7.0, "issues": []},
+            'infrastructure_analysis': {"score": 7.0, "issues": []},
+            'operations_analysis': {"score": 7.0, "issues": []},
+            'project_type': project_type,
+            **specialized_metrics
+        }
+        
+        # Calculate debt score
+        debt_metrics = debt_calculator.calculate_debt_score(all_metrics)
+        
+        return {
+            'debt_metrics': debt_metrics,
+            'all_metrics': all_metrics,
+            'project_type': project_type
+        }
+        
+    except Exception as e:
+        logger.warning(f"Enhanced analysis failed: {e}")
+        # Fallback to basic analysis
+        code_metrics = await code_analyzer.analyze_code_quality(repo_path)
+        all_metrics = {
+            'code_analysis': code_metrics,
+            'architecture_analysis': {"score": 7.0, "issues": []},
+            'infrastructure_analysis': {"score": 7.0, "issues": []},
+            'operations_analysis': {"score": 7.0, "issues": []},
+            'project_type': project_type
+        }
+        debt_metrics = debt_calculator.calculate_debt_score(all_metrics)
+        
+        return {
+            'debt_metrics': debt_metrics,
+            'all_metrics': all_metrics,
+            'project_type': project_type,
+            'analysis_warning': str(e)
+        }
 
 async def _fetch_github_org_repositories(org_name: str, max_repos: int = 10, include_forks: bool = False) -> List[Dict]:
     """Fetch repositories from a GitHub organization"""
@@ -241,9 +332,11 @@ async def _scan_single_repository(repo_info: Dict, scan_type: str = "github") ->
                 
                 # Try advanced analysis
                 try:
-                    # Initialize analyzers
-                    code_analyzer = CodeAnalyzer(temp_dir)
-                    debt_calculator = DebtScoreCalculator()
+                    # Run enhanced analysis with specialized analyzers
+                    analysis_result = await _run_enhanced_analysis(repo_path, temp_dir)
+                    debt_metrics = analysis_result['debt_metrics']
+                    all_metrics = analysis_result['all_metrics']
+                    project_type = analysis_result['project_type']
                     
                     # Create project info
                     project_info = ProjectInfo(
@@ -255,19 +348,6 @@ async def _scan_single_repository(repo_info: Dict, scan_type: str = "github") ->
                         last_activity_at=repo_info.get('updated_at', repo_info.get('last_activity_at', datetime.now().isoformat()))
                     )
                     
-                    # Run code analysis
-                    code_metrics = await code_analyzer.analyze_code_quality(repo_path)
-                    
-                    # Calculate basic debt score
-                    all_metrics = {
-                        'code_analysis': code_metrics,
-                        'architecture_analysis': {"score": 7.0, "issues": []},
-                        'infrastructure_analysis': {"score": 7.0, "issues": []},
-                        'operations_analysis': {"score": 7.0, "issues": []}
-                    }
-                    
-                    debt_metrics = debt_calculator.calculate_debt_score(all_metrics)
-                    
                     # Create scan result
                     scan_result = {
                         "scan_id": scan_id,
@@ -278,9 +358,14 @@ async def _scan_single_repository(repo_info: Dict, scan_type: str = "github") ->
                         "basic_analysis": basic_analysis,
                         "detailed_analysis": all_metrics,
                         "repository_info": repo_info,
+                        "project_type": project_type,
                         "timestamp": datetime.now().isoformat(),
                         "risk_level": _get_risk_level_from_score(debt_metrics.overall_score)
                     }
+                    
+                    # Add analysis warning if present
+                    if 'analysis_warning' in analysis_result:
+                        scan_result['analysis_warning'] = analysis_result['analysis_warning']
                     
                     return scan_result
                     
@@ -500,37 +585,14 @@ class TechDebtAPI:
         if not repo_path.exists():
             raise ValueError(f"Project path does not exist: {repo_path}")
         
-        # Initialize analyzers
-        code_analyzer = CodeAnalyzer(str(repo_path.parent))
-        arch_analyzer = ArchitectureAnalyzer()
-        infra_analyzer = InfrastructureAnalyzer()
-        ops_analyzer = OperationalAnalyzer()
-        
-        all_metrics = {}
-        
         try:
-            # Code quality analysis
-            all_metrics['code_analysis'] = await code_analyzer.analyze_code_quality(repo_path)
-            
-            # Architecture analysis
-            detected_languages = code_analyzer._detect_languages(repo_path)
-            all_metrics['architecture_analysis'] = await arch_analyzer.analyze_architecture(repo_path, detected_languages)
-            
-            # Infrastructure analysis (simplified for local projects)
-            project_info = ProjectInfo(
-                id=1, name=repo_path.name, path=str(repo_path),
-                web_url="", default_branch="main", last_activity_at=datetime.now().isoformat()
-            )
-            all_metrics['infrastructure_analysis'] = await infra_analyzer.analyze_infrastructure(repo_path, project_info, [])
-            
-            # Operations analysis (simplified for local projects)
-            all_metrics['operations_analysis'] = await ops_analyzer.analyze_operations(repo_path, project_info, [], [])
-            
-            # Calculate debt score
-            debt_metrics = self.debt_calculator.calculate_debt_score(all_metrics)
+            # Use enhanced analysis for local projects too
+            analysis_result = await _run_enhanced_analysis(repo_path, str(repo_path.parent))
+            debt_metrics = analysis_result['debt_metrics']
+            logger.info(f"Enhanced local analysis completed for {analysis_result['project_type']} project")
             
         except Exception as e:
-            logger.warning(f"Some analysis failed, using fallback metrics: {e}")
+            logger.warning(f"Enhanced analysis failed, using fallback metrics: {e}")
             # Fallback to basic metrics
             debt_metrics = DebtMetrics(
                 code_quality_score=6.5,
@@ -893,7 +955,9 @@ async def get_scan_results(page: int = 1, limit: int = 10):
             "infrastructure": debt_metrics.get("infrastructure_score", 0.0),
             "operations": debt_metrics.get("operations_score", 0.0),
             "file_count": result.get("basic_analysis", {}).get("total_files", 0),
-            "status": result["status"]
+            "project_type": result.get("project_type", "generic"),
+            "status": result["status"],
+            "analysis_warning": result.get("analysis_warning", None)
         }
         transformed_results.append(transformed_result)
     
@@ -1110,34 +1174,13 @@ async def scan_github_repository(request: GitHubScanRequest, background_tasks: B
                 try:
                     logger.info("Attempting advanced analysis...")
                     
-                    # Initialize analyzers
-                    code_analyzer = CodeAnalyzer(temp_dir)
-                    debt_calculator = DebtScoreCalculator()
+                    # Run enhanced analysis with specialized analyzers
+                    analysis_result = await _run_enhanced_analysis(repo_path, temp_dir)
+                    debt_metrics = analysis_result['debt_metrics']
+                    all_metrics = analysis_result['all_metrics']
+                    project_type = analysis_result['project_type']
                     
-                    # Create project info
-                    project_info = ProjectInfo(
-                        id=1,
-                        name=request.project_name,
-                        path=str(repo_path),
-                        web_url=request.repository_url,
-                        default_branch="main",
-                        last_activity_at=datetime.now().isoformat()
-                    )
-                    
-                    # Run code analysis
-                    code_metrics = await code_analyzer.analyze_code_quality(repo_path)
-                    logger.info("Code analysis completed")
-                    
-                    # Calculate basic debt score
-                    all_metrics = {
-                        'code_analysis': code_metrics,
-                        'architecture_analysis': {"score": 7.0, "issues": []},
-                        'infrastructure_analysis': {"score": 7.0, "issues": []},
-                        'operations_analysis': {"score": 7.0, "issues": []}
-                    }
-                    
-                    debt_metrics = debt_calculator.calculate_debt_score(all_metrics)
-                    logger.info("Debt calculation completed")
+                    logger.info(f"Enhanced analysis completed for {project_type} project")
                     
                     # Create scan result for storage
                     scan_result = {
@@ -1148,9 +1191,14 @@ async def scan_github_repository(request: GitHubScanRequest, background_tasks: B
                         "debt_metrics": asdict(debt_metrics),
                         "basic_analysis": basic_analysis,
                         "detailed_analysis": all_metrics,
+                        "project_type": project_type,
                         "timestamp": datetime.now().isoformat(),
                         "risk_level": _get_risk_level_from_score(debt_metrics.overall_score)
                     }
+                    
+                    # Add analysis warning if present
+                    if 'analysis_warning' in analysis_result:
+                        scan_result['analysis_warning'] = analysis_result['analysis_warning']
                     
                     # Store the scan result
                     SCAN_RESULTS_STORE.append(scan_result)
