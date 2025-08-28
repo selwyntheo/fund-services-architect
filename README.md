@@ -48,12 +48,31 @@ This will:
 
 ```bash
 cd dashboard
-./start_dashboard.sh
+./setup.sh        # Automated setup (recommended)
+# OR
+./start_dashboard.sh  # Quick start for development
+```
+
+**For new machine deployment:**
+```bash
+cd dashboard
+./setup.sh        # Complete setup with environment configuration
+npm start         # Production mode
+# OR
+npm run dev       # Development mode
 ```
 
 This will:
 - Install Node.js dependencies
-- Start the Next.js development server on `http://localhost:3000`
+- Configure environment variables
+- Build the application for production
+- Start the Next.js server on `http://localhost:3000`
+
+**Troubleshooting:** If you encounter issues, run:
+```bash
+cd dashboard
+./troubleshoot.sh  # Diagnose and fix common problems
+```
 
 ### 3. Access the Application
 
