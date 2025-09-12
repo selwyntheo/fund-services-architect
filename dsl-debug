@@ -1,0 +1,435 @@
+// Debug Context to track execution state
+public class DebugContext {
+private final Stack<DebugFrame> frameStack = new Stack<>();
+private final List<DebugEvent> eventLog = new ArrayList<>();
+private boolean stepMode = false;
+private boolean stepIntoMode = false;
+private final Set<Integer> breakpoints = new HashSet<>();
+private DebugListener listener;
+
+```
+public DebugContext(DebugListener listener) {
+    this.listener = listener;
+}
+
+public void enterRule(String ruleName, ParserRuleContext ctx) {
+    DebugFrame frame = new DebugFrame(ruleName, ctx);
+    frameStack.push(frame);
+    
+    DebugEvent event = new DebugEvent(
+        DebugEventType.RULE_ENTER, 
+        ruleName, 
+        ctx.start.getLine(),
+        ctx.start.getCharPositionInLine(),
+        getCurrentContext()
+    );
+    eventLog.add(event);
+    
+    if (shouldBreak(ctx.start.getLine())) {
+        listener.onBreakpoint(event, this);
+    }
+}
+
+public void exitRule(String ruleName, Object result) {
+    if (!frameStack.isEmpty()) {
+        DebugFrame frame = frameStack.pop();
+        frame.setResult(result);
+        
+        DebugEvent event = new DebugEvent(
+            DebugEventType.RULE_EXIT,
+            ruleName,
+            frame.getContext().start.getLine(),
+            frame.getContext().start.getCharPositionInLine(),
+            result
+        );
+        eventLog.add(event);
+        
+        if (stepMode) {
+            listener.onStep(event, this);
+        }
+    }
+}
+
+public void logCalculation(String operation, Object left, Object right, Object result, int line) {
+    DebugEvent event = new DebugEvent(
+        DebugEventType.CALCULATION,
+        operation + ": " + left + " " + operation + " " + right + " = " + result,
+        line,
+        0,
+        result
+    );
+    eventLog.add(event);
+    
+    if (stepMode) {
+        listener.onCalculation(event, this);
+    }
+}
+
+public void logVariableAssignment(String varName, Object value, int line) {
+    if (!frameStack.isEmpty()) {
+        frameStack.peek().setVariable(varName, value);
+    }
+    
+    DebugEvent event = new DebugEvent(
+        DebugEventType.VARIABLE_ASSIGNMENT,
+        varName + " = " + value,
+        line,
+        0,
+        value
+    );
+    eventLog.add(event);
+    
+    if (stepMode) {
+        listener.onVariableChange(event, this);
+    }
+}
+
+private boolean shouldBreak(int line) {
+    return breakpoints.contains(line) || stepMode;
+}
+
+public String getCurrentContext() {
+    StringBuilder sb = new StringBuilder();
+    for (DebugFrame frame : frameStack) {
+        sb.append(frame.getRuleName()).append(" -> ");
+    }
+    return sb.length() > 4 ? sb.substring(0, sb.length() - 4) : "";
+}
+
+// Getters and setters
+public void setStepMode(boolean stepMode) { this.stepMode = stepMode; }
+public void setStepIntoMode(boolean stepIntoMode) { this.stepIntoMode = stepIntoMode; }
+public void addBreakpoint(int line) { breakpoints.add(line); }
+public void removeBreakpoint(int line) { breakpoints.remove(line); }
+public List<DebugEvent> getEventLog() { return new ArrayList<>(eventLog); }
+public Stack<DebugFrame> getFrameStack() { return (Stack<DebugFrame>) frameStack.clone(); }
+```
+
+}
+
+// Debug Event types and data
+enum DebugEventType {
+RULE_ENTER, RULE_EXIT, CALCULATION, VARIABLE_ASSIGNMENT, BREAKPOINT
+}
+
+class DebugEvent {
+private final DebugEventType type;
+private final String description;
+private final int line;
+private final int column;
+private final Object value;
+private final long timestamp;
+
+```
+public DebugEvent(DebugEventType type, String description, int line, int column, Object value) {
+    this.type = type;
+    this.description = description;
+    this.line = line;
+    this.column = column;
+    this.value = value;
+    this.timestamp = System.currentTimeMillis();
+}
+
+// Getters
+public DebugEventType getType() { return type; }
+public String getDescription() { return description; }
+public int getLine() { return line; }
+public int getColumn() { return column; }
+public Object getValue() { return value; }
+public long getTimestamp() { return timestamp; }
+
+@Override
+public String toString() {
+    return String.format("[%s] Line %d: %s (Value: %s)", 
+                       type, line, description, value);
+}
+```
+
+}
+
+class DebugFrame {
+private final String ruleName;
+private final ParserRuleContext context;
+private final Map<String, Object> variables = new HashMap<>();
+private Object result;
+
+```
+public DebugFrame(String ruleName, ParserRuleContext context) {
+    this.ruleName = ruleName;
+    this.context = context;
+}
+
+public void setVariable(String name, Object value) {
+    variables.put(name, value);
+}
+
+public Object getVariable(String name) {
+    return variables.get(name);
+}
+
+// Getters
+public String getRuleName() { return ruleName; }
+public ParserRuleContext getContext() { return context; }
+public Map<String, Object> getVariables() { return new HashMap<>(variables); }
+public Object getResult() { return result; }
+public void setResult(Object result) { this.result = result; }
+```
+
+}
+
+// Debug listener interface
+interface DebugListener {
+void onBreakpoint(DebugEvent event, DebugContext context);
+void onStep(DebugEvent event, DebugContext context);
+void onCalculation(DebugEvent event, DebugContext context);
+void onVariableChange(DebugEvent event, DebugContext context);
+}
+
+// Example implementation of your DSL visitor with debugging
+public class DebuggingCalculatorVisitor extends CalculatorBaseVisitor<Double> {
+private final DebugContext debugContext;
+private final Map<String, Double> variables = new HashMap<>();
+
+```
+public DebuggingCalculatorVisitor(DebugContext debugContext) {
+    this.debugContext = debugContext;
+}
+
+@Override
+public Double visitExpression(CalculatorParser.ExpressionContext ctx) {
+    debugContext.enterRule("expression", ctx);
+    Double result = super.visitExpression(ctx);
+    debugContext.exitRule("expression", result);
+    return result;
+}
+
+@Override
+public Double visitAddition(CalculatorParser.AdditionContext ctx) {
+    debugContext.enterRule("addition", ctx);
+    
+    Double left = visit(ctx.expression(0));
+    Double right = visit(ctx.expression(1));
+    Double result = left + right;
+    
+    debugContext.logCalculation("+", left, right, result, ctx.start.getLine());
+    debugContext.exitRule("addition", result);
+    
+    return result;
+}
+
+@Override
+public Double visitMultiplication(CalculatorParser.MultiplicationContext ctx) {
+    debugContext.enterRule("multiplication", ctx);
+    
+    Double left = visit(ctx.expression(0));
+    Double right = visit(ctx.expression(1));
+    Double result = left * right;
+    
+    debugContext.logCalculation("*", left, right, result, ctx.start.getLine());
+    debugContext.exitRule("multiplication", result);
+    
+    return result;
+}
+
+@Override
+public Double visitAssignment(CalculatorParser.AssignmentContext ctx) {
+    debugContext.enterRule("assignment", ctx);
+    
+    String varName = ctx.ID().getText();
+    Double value = visit(ctx.expression());
+    variables.put(varName, value);
+    
+    debugContext.logVariableAssignment(varName, value, ctx.start.getLine());
+    debugContext.exitRule("assignment", value);
+    
+    return value;
+}
+
+@Override
+public Double visitVariable(CalculatorParser.VariableContext ctx) {
+    debugContext.enterRule("variable", ctx);
+    
+    String varName = ctx.ID().getText();
+    Double value = variables.get(varName);
+    if (value == null) {
+        throw new RuntimeException("Undefined variable: " + varName);
+    }
+    
+    debugContext.exitRule("variable", value);
+    return value;
+}
+
+@Override
+public Double visitNumber(CalculatorParser.NumberContext ctx) {
+    debugContext.enterRule("number", ctx);
+    Double value = Double.valueOf(ctx.NUMBER().getText());
+    debugContext.exitRule("number", value);
+    return value;
+}
+```
+
+}
+
+// Interactive debugger console
+public class DebuggerConsole implements DebugListener {
+private final Scanner scanner = new Scanner(System.in);
+private boolean continueExecution = false;
+
+```
+@Override
+public void onBreakpoint(DebugEvent event, DebugContext context) {
+    System.out.println("\n=== BREAKPOINT HIT ===");
+    printDebugInfo(event, context);
+    waitForUserInput(context);
+}
+
+@Override
+public void onStep(DebugEvent event, DebugContext context) {
+    System.out.println("\n=== STEP ===");
+    printDebugInfo(event, context);
+    if (!continueExecution) {
+        waitForUserInput(context);
+    }
+}
+
+@Override
+public void onCalculation(DebugEvent event, DebugContext context) {
+    System.out.println("CALC: " + event.getDescription());
+    if (context.stepMode && !continueExecution) {
+        waitForUserInput(context);
+    }
+}
+
+@Override
+public void onVariableChange(DebugEvent event, DebugContext context) {
+    System.out.println("VAR: " + event.getDescription());
+    if (context.stepMode && !continueExecution) {
+        waitForUserInput(context);
+    }
+}
+
+private void printDebugInfo(DebugEvent event, DebugContext context) {
+    System.out.println("Event: " + event);
+    System.out.println("Context: " + context.getCurrentContext());
+    
+    if (!context.getFrameStack().isEmpty()) {
+        DebugFrame currentFrame = context.getFrameStack().peek();
+        if (!currentFrame.getVariables().isEmpty()) {
+            System.out.println("Variables:");
+            currentFrame.getVariables().forEach((k, v) -> 
+                System.out.println("  " + k + " = " + v));
+        }
+    }
+}
+
+private void waitForUserInput(DebugContext context) {
+    System.out.println("\nDebugger commands:");
+    System.out.println("  s - step");
+    System.out.println("  c - continue");
+    System.out.println("  i - step into");
+    System.out.println("  v - show variables");
+    System.out.println("  t - show call stack");
+    System.out.println("  h - show event history");
+    System.out.print("debug> ");
+    
+    String command = scanner.nextLine().trim().toLowerCase();
+    
+    switch (command) {
+        case "s":
+            context.setStepMode(true);
+            continueExecution = false;
+            break;
+        case "c":
+            context.setStepMode(false);
+            continueExecution = true;
+            break;
+        case "i":
+            context.setStepIntoMode(true);
+            context.setStepMode(true);
+            continueExecution = false;
+            break;
+        case "v":
+            showVariables(context);
+            waitForUserInput(context);
+            break;
+        case "t":
+            showCallStack(context);
+            waitForUserInput(context);
+            break;
+        case "h":
+            showEventHistory(context);
+            waitForUserInput(context);
+            break;
+        default:
+            System.out.println("Unknown command: " + command);
+            waitForUserInput(context);
+            break;
+    }
+}
+
+private void showVariables(DebugContext context) {
+    System.out.println("\n=== ALL VARIABLES ===");
+    for (DebugFrame frame : context.getFrameStack()) {
+        if (!frame.getVariables().isEmpty()) {
+            System.out.println("Frame: " + frame.getRuleName());
+            frame.getVariables().forEach((k, v) -> 
+                System.out.println("  " + k + " = " + v));
+        }
+    }
+}
+
+private void showCallStack(DebugContext context) {
+    System.out.println("\n=== CALL STACK ===");
+    Stack<DebugFrame> frames = context.getFrameStack();
+    for (int i = frames.size() - 1; i >= 0; i--) {
+        DebugFrame frame = frames.get(i);
+        System.out.println((frames.size() - i) + ". " + frame.getRuleName() + 
+                         " (Line: " + frame.getContext().start.getLine() + ")");
+    }
+}
+
+private void showEventHistory(DebugContext context) {
+    System.out.println("\n=== EVENT HISTORY (last 10) ===");
+    List<DebugEvent> events = context.getEventLog();
+    int start = Math.max(0, events.size() - 10);
+    for (int i = start; i < events.size(); i++) {
+        System.out.println((i + 1) + ". " + events.get(i));
+    }
+}
+```
+
+}
+
+// Usage example
+public class DSLDebuggerExample {
+public static void main(String[] args) throws Exception {
+// Your ANTLR generated lexer and parser
+String input = “x = 5 + 3\ny = x * 2\nresult = y + 10”;
+
+```
+    ANTLRInputStream inputStream = new ANTLRInputStream(input);
+    CalculatorLexer lexer = new CalculatorLexer(inputStream);
+    CommonTokenStream tokens = new CommonTokenStream(lexer);
+    CalculatorParser parser = new CalculatorParser(tokens);
+    
+    // Set up debugger
+    DebuggerConsole console = new DebuggerConsole();
+    DebugContext debugContext = new DebugContext(console);
+    
+    // Add breakpoints
+    debugContext.addBreakpoint(2); // Break on line 2
+    debugContext.setStepMode(true); // Start in step mode
+    
+    // Create debugging visitor
+    DebuggingCalculatorVisitor visitor = new DebuggingCalculatorVisitor(debugContext);
+    
+    // Parse and execute with debugging
+    ParseTree tree = parser.program();
+    visitor.visit(tree);
+    
+    System.out.println("\n=== FINAL EVENT LOG ===");
+    debugContext.getEventLog().forEach(System.out::println);
+}
+```
+
+}
