@@ -1,0 +1,281 @@
+# ============================================================================
+# S3 File Reader Configuration Schema
+# ============================================================================
+# This configuration drives a generic Java-based file reader that can ingest
+# CSV, Excel (XLSX/XLS), TXT (delimited), and Fixed-Length files from AWS S3.
+#
+# Design Principles:
+#   - Convention over configuration (sensible defaults everywhere)
+#   - Only specify what deviates from defaults
+#   - Format-specific sections are only needed for that format
+# ============================================================================
+
+# --------------------------------------------------
+# 1. SOURCE: Where to read from
+# --------------------------------------------------
+source:
+  type: s3                              # s3 | local (extensible)
+  bucket: "my-data-bucket"              # S3 bucket name
+  key: "inbound/trades/2024/trades.csv" # S3 object key (supports wildcards: *.csv)
+  region: "us-east-1"                   # AWS region (default: from SDK chain)
+  role_arn: ""                          # Optional: cross-account assume-role ARN
+  encryption:
+    enabled: false
+    kms_key_id: ""                      # KMS key for server-side encryption
+  polling:                              # Optional: for scheduled/watch-mode reads
+    enabled: false
+    cron: "0 */15 * * * *"             # Every 15 minutes
+    archive_after_read: true            # Move to archive prefix after processing
+    archive_prefix: "archive/"
+
+# --------------------------------------------------
+# 2. FILE FORMAT
+# --------------------------------------------------
+format:
+  type: csv                             # csv | excel | txt | fixed_length
+  encoding: "UTF-8"                     # File encoding (UTF-8, ISO-8859-1, etc.)
+  compression: none                     # none | gzip | zip | bzip2
+
+# --------------------------------------------------
+# 3. PARSING — General (applies to all formats)
+# --------------------------------------------------
+parsing:
+  # --- Header handling ---
+  has_header: true                      # First data row is a header?
+  skip_header_rows: 0                   # Extra header rows to skip BEFORE the column header
+                                        # e.g., 2 means rows 1-2 are junk, row 3 is header
+
+  # --- Row control ---
+  skip_rows_top: 0                      # Skip N rows from the top (after header processing)
+  skip_rows_bottom: 0                   # Skip N rows from the bottom (e.g., summary rows)
+  max_rows: -1                          # Max data rows to read (-1 = unlimited)
+  skip_blank_rows: true                 # Ignore completely empty rows?
+
+  # --- Row filtering (optional) ---
+  row_filter:
+    # Include rows only if they match ALL conditions
+    include:
+      - column: "status"
+        operator: "in"                  # eq | neq | in | not_in | regex | gt | lt | gte | lte
+        value: ["ACTIVE", "PENDING"]
+    # Exclude rows matching ANY condition
+    exclude:
+      - column: "account_type"
+        operator: "eq"
+        value: "INTERNAL"
+
+  # --- Trim & clean ---
+  trim_whitespace: true                 # Trim leading/trailing whitespace from all values
+  null_markers: ["", "NULL", "N/A", "null", "#N/A"]  # Treat these as null
+
+# --------------------------------------------------
+# 4. COLUMNS — Select, rename, type & validate
+# --------------------------------------------------
+columns:
+  # Strategy: "all" reads every column, "select" picks specific ones
+  strategy: select                      # all | select | exclude
+
+  # When strategy = select, list columns to include:
+  selected:
+    - name: "trade_id"                  # Column name (from header) or index (0-based)
+      alias: "tradeId"                  # Rename in output (optional)
+      data_type: "string"              # string | integer | long | double | decimal | date | datetime | boolean
+      required: true                    # Fail if null/missing?
+      default_value: null               # Default when value is null/missing
+
+    - name: "trade_date"
+      alias: "tradeDate"
+      data_type: "date"
+      format: "MM/dd/yyyy"             # Date/datetime format pattern
+      required: true
+
+    - name: "settlement_date"
+      alias: "settlementDate"
+      data_type: "date"
+      format: "yyyy-MM-dd"
+
+    - name: "quantity"
+      alias: "qty"
+      data_type: "decimal"
+      scale: 4                          # Decimal places for decimal type
+      required: true
+
+    - name: "price"
+      data_type: "decimal"
+      scale: 6
+
+    - name: "currency"
+      data_type: "string"
+      allowed_values: ["USD", "EUR", "GBP", "JPY"]  # Value whitelist
+
+    - name: "status"
+      data_type: "string"
+
+  # When strategy = exclude, list columns to drop:
+  excluded:
+    - "internal_notes"
+    - "created_by"
+
+  # Column selection by index (alternative to name-based, useful for headerless files)
+  # Use 0-based indices
+  selected_by_index:
+    - index: 0
+      alias: "tradeId"
+      data_type: "string"
+    - index: 3
+      alias: "quantity"
+      data_type: "decimal"
+
+# --------------------------------------------------
+# 5. FORMAT-SPECIFIC: CSV
+# --------------------------------------------------
+csv:
+  delimiter: ","                        # Field delimiter (, | \t | | | ; | custom)
+  quote_char: "\""                      # Quote character for enclosed fields
+  escape_char: "\\"                     # Escape character inside quoted fields
+  comment_char: "#"                     # Lines starting with this are ignored
+  line_separator: "\n"                  # \n | \r\n | \r
+
+# --------------------------------------------------
+# 6. FORMAT-SPECIFIC: Excel (XLSX / XLS)
+# --------------------------------------------------
+excel:
+  sheet: "Sheet1"                       # Sheet name to read
+  sheet_index: 0                        # OR sheet index (0-based), name takes precedence
+  cell_range: ""                        # Optional: "A1:G500" — read only this range
+  evaluate_formulas: true               # Evaluate Excel formulas or read raw?
+  read_hidden_sheets: false
+  read_hidden_columns: false
+  date_format: "yyyy-MM-dd"            # Default date format for date cells
+
+# --------------------------------------------------
+# 7. FORMAT-SPECIFIC: TXT (Delimited Text)
+# --------------------------------------------------
+txt:
+  delimiter: "|"                        # Pipe, tab (\t), or any custom delimiter
+  quote_char: "\""
+  escape_char: "\\"
+  line_separator: "\n"
+  comment_char: "#"
+
+# --------------------------------------------------
+# 8. FORMAT-SPECIFIC: Fixed Length
+# --------------------------------------------------
+fixed_length:
+  # Define each field by position
+  fields:
+    - name: "record_type"
+      start: 0                          # 0-based start position (inclusive)
+      length: 2
+      data_type: "string"
+      trim: true                        # Trim padding for this field
+
+    - name: "account_number"
+      start: 2
+      length: 10
+      data_type: "string"
+      pad_char: "0"                     # Expected padding character
+      trim: true
+
+    - name: "trade_date"
+      start: 12
+      length: 8
+      data_type: "date"
+      format: "yyyyMMdd"
+
+    - name: "amount"
+      start: 20
+      length: 15
+      data_type: "decimal"
+      scale: 2
+      implied_decimal: true             # e.g., "000000001234500" = 12345.00
+
+    - name: "currency"
+      start: 35
+      length: 3
+      data_type: "string"
+
+    - name: "filler"
+      start: 38
+      length: 12
+      data_type: "string"
+      skip: true                        # Don't include in output
+
+  record_length: 50                     # Expected total record length (for validation)
+  line_separator: "\n"
+
+  # Multi-record-type files (e.g., header/detail/trailer)
+  record_types:
+    enabled: false
+    type_field: "record_type"           # Which field determines the record type
+    types:
+      "HD":
+        action: skip                    # skip | read | validate
+        description: "Header record"
+      "DT":
+        action: read
+        description: "Detail/data record"
+      "TR":
+        action: skip
+        description: "Trailer record"
+
+# --------------------------------------------------
+# 9. VALIDATION
+# --------------------------------------------------
+validation:
+  enabled: true
+  fail_fast: false                      # true = stop on first error; false = collect all
+  max_errors: 100                       # Stop after N errors (even if fail_fast=false)
+
+  rules:
+    - column: "quantity"
+      check: "positive"                 # positive | non_negative | non_zero | range | regex | unique
+    - column: "price"
+      check: "range"
+      min: 0.0001
+      max: 999999.999999
+    - column: "trade_id"
+      check: "unique"                   # No duplicate trade IDs
+    - column: "currency"
+      check: "regex"
+      pattern: "^[A-Z]{3}$"
+
+# --------------------------------------------------
+# 10. OUTPUT
+# --------------------------------------------------
+output:
+  # How to surface the parsed data to Java
+  mode: "stream"                        # stream | batch | dataframe
+                                        # stream  = Iterator<Record> (memory efficient)
+                                        # batch   = List<Record> (all in memory)
+                                        # dataframe = tabular structure
+
+  # Optional: write parsed/validated data to a target
+  target:
+    enabled: false
+    type: "jdbc"                        # jdbc | s3_parquet | s3_csv | kafka
+    jdbc:
+      url: "jdbc:postgresql://host:5432/db"
+      table: "trades_staging"
+      batch_size: 1000
+      on_conflict: "skip"               # skip | update | fail
+
+# --------------------------------------------------
+# 11. ERROR HANDLING
+# --------------------------------------------------
+error_handling:
+  on_parse_error: "skip_row"            # skip_row | fail | use_default
+  on_type_mismatch: "skip_row"          # skip_row | fail | coerce | use_default
+  on_missing_column: "fail"             # fail | ignore | use_default
+  on_file_not_found: "fail"             # fail | warn | skip
+  bad_records_file: "s3://my-bucket/errors/bad_records.csv"  # Write rejected rows here
+  log_level: "WARN"                     # DEBUG | INFO | WARN | ERROR
+
+# --------------------------------------------------
+# 12. PERFORMANCE
+# --------------------------------------------------
+performance:
+  buffer_size_mb: 64                    # Read buffer size
+  parallel_sheets: false                # Read multiple Excel sheets in parallel
+  chunk_size: 10000                     # Rows per processing chunk (for stream mode)
+  use_memory_mapped_io: false           # Memory-mapped file reading
