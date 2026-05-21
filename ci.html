@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BNY Market Intelligence · Asset Servicing</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined" rel="stylesheet">
+<style>
+  .material-icons, .material-icons-outlined {
+    font-size: 18px;
+    vertical-align: middle;
+    line-height: 1;
+  }
+  :root {
+    --navy: #04243C;
+    --navy-2: #0A3553;
+    --teal: #2B9CAE;
+    --teal-2: #7FCAD5;
+    --teal-bg: #E8F4F6;
+    --amber: #BA7517;
+    --amber-bg: #FBF0DC;
+    --red: #A32D2D;
+    --red-bg: #F8E3E3;
+    --green: #2F7D4F;
+    --green-bg: #E3F1E9;
+    --page: #F4F8FA;
+    --card: #FFFFFF;
+    --border: #D9E2E8;
+    --border-2: #E8EDF1;
+    --text: #1A2733;
+    --text-2: #56697A;
+    --text-3: #8A98A6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    background: var(--page);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .mono { font-family: "SF Mono", Menlo, Consolas, monospace; }
+
+  /* Layout */
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+  /* Left rail */
+  aside {
+    background: var(--navy);
+    color: #C8D6E0;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .brand { padding: 4px 20px 24px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 16px; }
+  .brand-mark { width: 32px; height: 32px; background: var(--teal); border-radius: 6px; color: #fff; font-weight: 600; display: grid; place-items: center; font-size: 12px; }
+  .brand-name { font-size: 11px; color: #8FA4B5; text-transform: uppercase; letter-spacing: 0.08em; }
+  .brand-product { color: #fff; font-weight: 600; font-size: 14px; margin-top: 1px; }
+
+  nav .section-label { padding: 14px 20px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #6E839A; }
+  nav a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 20px; color: #C8D6E0; text-decoration: none;
+    font-size: 13px;
+    border-left: 2px solid transparent;
+  }
+  nav a:hover { background: rgba(255,255,255,0.04); color: #fff; }
+  nav a.active { background: rgba(43,156,174,0.12); color: #fff; border-left-color: var(--teal); }
+  nav a .badge { margin-left: auto; background: var(--amber); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+  nav a .badge.red { background: var(--red); }
+  nav a .badge.teal { background: var(--teal); }
+  nav a .icon { width: 18px; text-align: center; opacity: 0.7; font-size: 18px; }
+
+  .user-strip { position: absolute; bottom: 0; left: 0; right: 0; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 10px; }
+  .user-avatar { width: 28px; height: 28px; background: var(--teal); border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 600; }
+  .user-meta { font-size: 12px; }
+  .user-name { color: #fff; }
+  .user-role { color: #8FA4B5; font-size: 11px; }
+
+  /* Topbar */
+  main { padding: 0; }
+  .topbar {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 14px 32px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .breadcrumbs { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+  .breadcrumbs a { color: var(--text-2); text-decoration: none; }
+  .breadcrumbs a:hover { color: var(--teal); }
+  .breadcrumbs .sep { color: var(--text-3); }
+  .breadcrumbs .current { color: var(--text); font-weight: 500; }
+  .topbar-spacer { flex: 1; }
+  .lens-toggle { display: flex; background: var(--page); border-radius: 6px; padding: 2px; font-size: 12px; }
+  .lens-toggle button { background: none; border: none; padding: 5px 12px; border-radius: 4px; color: var(--text-2); cursor: pointer; font-family: inherit; font-size: 12px; }
+  .lens-toggle button.active { background: #fff; color: var(--navy); font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+
+  /* Page */
+  .page { padding: 28px 32px 60px; max-width: 1400px; }
+  .page-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
+  .page-title { font-size: 22px; font-weight: 600; color: var(--navy); margin: 0; letter-spacing: -0.01em; }
+  .page-sub { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-2); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--navy); margin: 0; }
+  .card-sub { font-size: 12px; color: var(--text-2); }
+  .card-body { padding: 20px; }
+  .card-body.flush { padding: 0; }
+
+  /* Pills (reused from DDQ) */
+  .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.4; }
+  .pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.9; }
+  .pill.published { background: var(--green-bg); color: var(--green); }
+  .pill.review { background: var(--amber-bg); color: var(--amber); }
+  .pill.halt { background: var(--red-bg); color: var(--red); }
+  .pill.drafting { background: var(--teal-bg); color: var(--teal); }
+  .pill.idle { background: #EDF1F4; color: var(--text-2); }
+
+  /* Source tier badges */
+  .tier-badge { display: inline-flex; align-items: center; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.05em; }
+  .tier-badge.t1 { background: #E3F1E9; color: var(--green); }
+  .tier-badge.t2 { background: #E8F4F6; color: var(--teal); }
+  .tier-badge.t3 { background: #F0F4F6; color: var(--text-2); }
+  .tier-badge.t4 { background: #FBF0DC; color: var(--amber); }
+
+  /* Buttons */
+  .btn { padding: 9px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid transparent; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+  .btn.primary { background: var(--teal); color: #fff; }
+  .btn.primary:hover { background: #248A9B; }
+  .btn.secondary { background: #fff; color: var(--navy); border-color: var(--border); }
+  .btn.secondary:hover { background: #F8FBFC; }
+  .btn.danger { background: #fff; color: var(--red); border-color: #E8C5C5; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row.stack { flex-direction: column; }
+  .btn-row.stack .btn { width: 100%; justify-content: center; }
+
+  /* Screen separator */
+  .screen-marker { padding: 40px 32px 12px; }
+  .screen-marker h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); margin: 0 0 4px; font-weight: 600; }
+  .screen-marker p { font-size: 12px; color: var(--text-2); margin: 0; max-width: 760px; }
+
+  /* ===== Screen 1: Weekly Digest ===== */
+  .digest-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); color: #fff; border-radius: 8px; padding: 28px 32px; margin-bottom: 24px; }
+  .digest-hero-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .digest-eyebrow { font-size: 11px; color: var(--teal-2); text-transform: uppercase; letter-spacing: 0.1em; }
+  .digest-title { font-size: 26px; font-weight: 600; margin: 6px 0 4px; letter-spacing: -0.01em; }
+  .digest-sub { font-size: 13px; color: #B4C7D6; }
+  .digest-meta { text-align: right; }
+  .digest-meta-row { font-size: 12px; color: #B4C7D6; margin-bottom: 4px; }
+  .digest-meta-row strong { color: #fff; }
+  .digest-synth { background: rgba(255,255,255,0.06); border-left: 3px solid var(--teal); padding: 16px 18px; border-radius: 4px; font-size: 14px; line-height: 1.6; color: #E0EAF2; }
+  .digest-synth-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal-2); margin-bottom: 8px; font-weight: 600; }
+
+  /* Digest sections */
+  .digest-section { margin-bottom: 24px; }
+  .digest-section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .digest-section-num { width: 24px; height: 24px; background: var(--teal-bg); color: var(--teal); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+  .digest-section-title { font-size: 15px; font-weight: 600; color: var(--navy); margin: 0; }
+  .digest-section-count { font-size: 11px; color: var(--text-3); margin-left: auto; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .digest-item { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; margin-bottom: 8px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; cursor: pointer; transition: border-color 80ms; }
+  .digest-item:hover { border-color: var(--teal); }
+  .digest-item-icon { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; flex-shrink: 0; }
+  .digest-item-icon.competitor { background: var(--teal-bg); color: var(--teal); }
+  .digest-item-icon.deal { background: var(--green-bg); color: var(--green); }
+  .digest-item-icon.regulatory { background: var(--amber-bg); color: var(--amber); }
+  .digest-item-icon.tech { background: #EEE7F5; color: #6B4FA5; }
+  .digest-item-icon.talent { background: #F5E9DD; color: #C25700; }
+  .digest-item-body { min-width: 0; }
+  .digest-item-headline { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+  .digest-item-summary { font-size: 13px; color: var(--text); line-height: 1.55; }
+  .digest-item-meta { font-size: 11px; color: var(--text-3); margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .digest-item-meta a { color: var(--teal); text-decoration: none; }
+  .digest-item-meta a:hover { text-decoration: underline; }
+  .digest-item-impact { text-align: right; font-size: 10px; padding-top: 2px; }
+  .impact-label { color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+  .impact-value { font-weight: 700; font-size: 11px; margin-top: 2px; }
+  .impact-value.high { color: var(--red); }
+  .impact-value.med { color: var(--amber); }
+  .impact-value.low { color: var(--text-2); }
+
+  /* Tracking next week */
+  .tracking-list { display: flex; flex-direction: column; gap: 8px; }
+  .tracking-item { padding: 12px 14px; background: #F8FBFC; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 12px; }
+  .tracking-date { font-size: 11px; font-weight: 600; color: var(--teal); white-space: nowrap; min-width: 70px; }
+  .tracking-text { color: var(--text); flex: 1; }
+
+  /* Source footer */
+  .source-footer { padding: 16px 20px; background: #F8FBFC; border-radius: 6px; font-size: 12px; color: var(--text-2); margin-top: 24px; }
+  .source-footer strong { color: var(--navy); }
+  .source-counts { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+  .source-count { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+  .source-count .n { font-weight: 700; color: var(--navy); }
+
+  /* ===== Screen 2: Competitor Page ===== */
+  .peer-hero { background: var(--navy); color: #fff; border-radius: 8px; padding: 24px 28px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; }
+  .peer-ident { display: flex; gap: 16px; align-items: center; }
+  .peer-logo { width: 60px; height: 60px; background: var(--teal); border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 22px; color: #fff; }
+  .peer-name { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .peer-ticker { font-size: 11px; color: var(--teal-2); text-transform: uppercase; letter-spacing: 0.1em; }
+  .peer-stats { display: flex; gap: 28px; }
+  .peer-stat .l { font-size: 11px; color: #B4C7D6; text-transform: uppercase; letter-spacing: 0.05em; }
+  .peer-stat .v { font-size: 22px; font-weight: 600; color: #fff; margin-top: 2px; letter-spacing: -0.01em; }
+  .peer-stat .d { font-size: 11px; color: var(--teal-2); margin-top: 2px; }
+
+  .peer-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; background: #fff; border-radius: 8px 8px 0 0; padding: 0 20px; }
+  .peer-tab { padding: 14px 18px; font-size: 13px; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; }
+  .peer-tab.active { color: var(--navy); border-bottom-color: var(--teal); }
+
+  .peer-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--border); }
+  .timeline-item { position: relative; padding-bottom: 20px; }
+  .timeline-item::before { content: ""; position: absolute; left: -21px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--teal); border: 2px solid #fff; }
+  .timeline-item.major::before { background: var(--amber); width: 12px; height: 12px; left: -22px; }
+  .timeline-date { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .timeline-headline { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+  .timeline-summary { font-size: 12px; color: var(--text); line-height: 1.55; }
+  .timeline-source { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+  .timeline-source a { color: var(--teal); text-decoration: none; }
+
+  /* Library entries grid */
+  .topic-row { padding: 14px 16px; border-bottom: 1px solid var(--border-2); display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; cursor: pointer; }
+  .topic-row:hover { background: #F8FBFC; }
+  .topic-row:last-child { border-bottom: none; }
+  .topic-name { font-size: 13px; font-weight: 500; color: var(--navy); }
+  .topic-canon { font-family: "SF Mono", Menlo, monospace; font-size: 10px; color: var(--text-3); margin-top: 2px; }
+  .topic-freshness { font-size: 11px; color: var(--text-2); }
+  .topic-freshness.stale { color: var(--amber); font-weight: 600; }
+
+  /* Metric mini-chart */
+  .metric-card { padding: 16px; background: #fff; border: 1px solid var(--border); border-radius: 6px; }
+  .metric-label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric-value { font-size: 24px; font-weight: 600; color: var(--navy); margin-top: 6px; letter-spacing: -0.01em; }
+  .metric-delta { font-size: 11px; margin-top: 2px; }
+  .metric-delta.up { color: var(--green); }
+  .metric-delta.down { color: var(--red); }
+  .metric-sparkline { margin-top: 8px; }
+
+  /* ===== Screen 3: Deals & Mandates ===== */
+  .deals-controls { display: flex; gap: 10px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border-2); background: #F8FBFC; }
+  .filter-input { padding: 7px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; background: #fff; font-family: inherit; min-width: 200px; }
+  .filter-select { padding: 7px 11px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; background: #fff; font-family: inherit; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 16px; background: #F8FAFB; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); font-weight: 600; }
+  tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border-2); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #F8FBFC; }
+  .deal-value { font-weight: 600; color: var(--navy); }
+  .deal-value .v-sub { display: block; font-size: 11px; color: var(--text-3); font-weight: 400; margin-top: 2px; }
+  .deal-parties { font-size: 12px; }
+  .deal-parties .winner { color: var(--green); font-weight: 600; }
+  .deal-parties .loser { color: var(--text-2); }
+  .deal-parties .arrow { color: var(--text-3); margin: 0 4px; }
+
+  /* KPI strip (reused) */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .kpi-label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; }
+  .kpi-value { font-size: 22px; font-weight: 600; color: var(--navy); margin-top: 4px; letter-spacing: -0.01em; }
+  .kpi-delta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .kpi-delta.good { color: var(--green); }
+  .kpi-delta.bad { color: var(--red); }
+
+  /* ===== Screen 4: Source Health ===== */
+  .source-row { padding: 14px 20px; border-bottom: 1px solid var(--border-2); display: grid; grid-template-columns: 32px 1fr 120px 100px 80px 100px; gap: 16px; align-items: center; }
+  .source-row:last-child { border-bottom: none; }
+  .source-icon { width: 32px; height: 32px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .source-icon.api { background: var(--teal); }
+  .source-icon.mailbox { background: var(--green); }
+  .source-icon.browser { background: var(--amber); }
+  .source-name { font-weight: 600; color: var(--navy); font-size: 13px; }
+  .source-meta { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+  .source-stat { font-size: 12px; color: var(--text); }
+  .source-stat .sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .health-dot { display: inline-flex; align-items: center; gap: 6px; }
+  .health-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+  .health-dot.green::before { background: var(--green); }
+  .health-dot.amber::before { background: var(--amber); }
+  .health-dot.red::before { background: var(--red); }
+
+  /* ===== Screen 5: Digest Review ===== */
+  .review-grid { display: grid; grid-template-columns: 280px 1fr 320px; gap: 20px; }
+  .recipient-list { background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .recipient-item { padding: 12px 14px; border-bottom: 1px solid var(--border-2); cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .recipient-item:last-child { border-bottom: none; }
+  .recipient-item.active { background: var(--teal-bg); border-left: 3px solid var(--teal); padding-left: 11px; }
+  .recipient-item:hover { background: #F8FBFC; }
+  .recipient-item.active:hover { background: var(--teal-bg); }
+  .recipient-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--teal-2); color: var(--navy); display: grid; place-items: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .recipient-name { font-size: 12px; font-weight: 600; color: var(--navy); }
+  .recipient-role { font-size: 10px; color: var(--text-2); margin-top: 1px; }
+  .recipient-flag { margin-left: auto; }
+
+  .email-preview { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; }
+  .email-from { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
+  .email-subject { font-size: 18px; font-weight: 600; color: var(--navy); margin: 0 0 6px; }
+  .email-to { font-size: 12px; color: var(--text-2); margin-bottom: 20px; }
+  .email-body { font-size: 13px; line-height: 1.6; }
+  .email-section-title { font-size: 13px; font-weight: 700; color: var(--navy); margin: 18px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .email-bullet { padding: 8px 0; }
+  .email-bullet-head { font-weight: 600; color: var(--navy); font-size: 13px; }
+  .email-bullet-text { font-size: 13px; color: var(--text); margin-top: 2px; }
+  .email-bullet-link { font-size: 11px; color: var(--teal); }
+
+  .review-sidebar .side-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .review-sidebar h4 { margin: 0 0 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); font-weight: 600; }
+  .meta-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; }
+  .meta-row + .meta-row { border-top: 1px solid var(--border-2); }
+  .meta-label { color: var(--text-2); }
+  .meta-value { color: var(--navy); font-weight: 500; }
+  .meta-value.mono { font-family: "SF Mono", Menlo, monospace; font-size: 11px; font-weight: 400; }
+
+  /* Tier mix bar */
+  .tier-mix-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .tier-mix-bar .seg { height: 100%; }
+  .tier-mix-bar .seg.t1 { background: var(--green); }
+  .tier-mix-bar .seg.t2 { background: var(--teal); }
+  .tier-mix-bar .seg.t3 { background: var(--text-3); }
+  .tier-mix-bar .seg.t4 { background: var(--amber); }
+  .tier-mix-legend { display: flex; gap: 12px; font-size: 11px; color: var(--text-2); flex-wrap: wrap; }
+  .tier-mix-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .tier-mix-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+  /* Banner */
+  .banner { padding: 12px 16px; border-radius: 6px; font-size: 12px; display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .banner.amber { background: var(--amber-bg); color: #8B5A12; border-left: 3px solid var(--amber); }
+  .banner.teal { background: var(--teal-bg); color: var(--teal); border-left: 3px solid var(--teal); }
+  .banner.red { background: var(--red-bg); color: var(--red); border-left: 3px solid var(--red); }
+  .banner .b-title { font-weight: 600; }
+  .banner .b-spacer { flex: 1; }
+  .banner a { color: inherit; text-decoration: underline; font-weight: 500; }
+
+  /* Section heading */
+  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); margin: 0 0 12px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- LEFT RAIL -->
+  <aside>
+    <div class="brand">
+      <div class="brand-mark">DE</div>
+      <div>
+        <div class="brand-name">BNY MI</div>
+        <div class="brand-product">Cassia</div>
+      </div>
+    </div>
+    <nav>
+      <div class="section-label">Intelligence</div>
+      <a href="#digest" class="active"><span class="icon material-icons-outlined">mail_outline</span>Weekly digest</a>
+      <a href="#competitors"><span class="icon material-icons-outlined">groups</span>Competitors<span class="badge teal">7</span></a>
+      <a href="#deals"><span class="icon material-icons-outlined">handshake</span>Deals &amp; mandates<span class="badge">14</span></a>
+      <a href="#regulatory"><span class="icon material-icons-outlined">gavel</span>Regulatory<span class="badge">3</span></a>
+      <a href="#benchmarks"><span class="icon material-icons-outlined">bar_chart</span>Benchmarks</a>
+      <a href="#library"><span class="icon material-icons-outlined">menu_book</span>Library</a>
+
+      <div class="section-label">Analyst</div>
+      <a href="#review"><span class="icon material-icons-outlined">edit_note</span>Digest review<span class="badge amber">Fri</span></a>
+      <a href="#sources"><span class="icon material-icons-outlined">cloud_download</span>Source health<span class="badge red">2</span></a>
+      <a href="#recipients"><span class="icon material-icons-outlined">contacts</span>Recipients</a>
+    </nav>
+    <div class="user-strip">
+      <div class="user-avatar">RC</div>
+      <div class="user-meta">
+        <div class="user-name">R. Chowdhury</div>
+        <div class="user-role">Head of Custody · AS</div>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <!-- ============================================================ -->
+    <!-- SCREEN 1 · Weekly Digest (Executive default) -->
+    <!-- ============================================================ -->
+    <div class="screen-marker">
+      <h2>Screen 1 · Weekly digest</h2>
+      <p>The Monday-morning read for Asset Servicing leadership. Built by Cassia Friday, reviewed by the CI analyst, delivered Monday 07:00 local. Five sections, ~3 items each, designed to scan in 90 seconds with link-back to original sources. Same surface viewed in the web app or received as email.</p>
+    </div>
+
+    <div class="topbar">
+      <div class="breadcrumbs">
+        <a href="#">Intelligence</a>
+        <span class="sep">›</span>
+        <span class="current">Weekly digest · May 19, 2026</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="lens-toggle">
+        <button class="active">Executive</button>
+        <button>Analyst</button>
+        <button>Editor</button>
+      </div>
+    </div>
+
+    <div class="page">
+
+      <!-- Hero with the 90-second synthesis -->
+      <div class="digest-hero">
+        <div class="digest-hero-top">
+          <div>
+            <div class="digest-eyebrow">Asset Servicing · Week of May 12 – 18, 2026</div>
+            <h1 class="digest-title">This week in Asset Servicing</h1>
+            <div class="digest-sub">Personalised for R. Chowdhury · Custody focus · 14 items, ~90 second read</div>
+          </div>
+          <div class="digest-meta">
+            <div class="digest-meta-row">Issue <strong>#247</strong></div>
+            <div class="digest-meta-row">Reviewed by <strong>L. Chen</strong>, CI Analyst</div>
+            <div class="digest-meta-row">Sealed <strong>May 19, 06:48 UTC</strong></div>
+          </div>
+        </div>
+        <div class="digest-synth">
+          <div class="digest-synth-label">90 seconds</div>
+          Three things stood out this week. <strong>State Street</strong> disclosed Alpha platform AUM crossed $4T at investor day, materially ahead of consensus, and tied it to two new sovereign mandates. The <strong>EU DORA</strong> implementation deadline saw the first supervisory letter cycle land at peers — Northern Trust and JPM disclosed remediation programmes in 10-Q footnotes; we should expect questions on our equivalent posture. And <strong>BlackRock's BUIDL</strong> tokenised cash fund passed $2.1B, with their CFO signalling institutional custody integrations are the next leg — a direct adjacency to our digital-asset custody roadmap.
+        </div>
+      </div>
+
+      <!-- Section 1: Competitor moves -->
+      <div class="digest-section">
+        <div class="digest-section-header">
+          <div class="digest-section-num">1</div>
+          <h2 class="digest-section-title">Competitor moves</h2>
+          <span class="digest-section-count">3 items</span>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon competitor"><span class="material-icons-outlined" style="font-size:16px">trending_up</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">State Street Alpha crosses $4T AUM at investor day</div>
+            <div class="digest-item-summary">STT disclosed Alpha platform AUM of $4.1T at May 14 investor day, up from $3.6T at year-end, and announced two new sovereign mandates (unnamed). Management framed Alpha as the engine of front-to-back asset-servicing growth, with 18% YoY fee revenue for the platform.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>STT Investor Day deck · May 14</span>
+              <span>·</span>
+              <a href="#">Global Custodian coverage</a>
+              <span>·</span>
+              <a href="#">Library entry: canon.ci.competitor.STT.alpha →</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon competitor"><span class="material-icons-outlined" style="font-size:16px">groups</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">JPM Securities Services hires former STT EMEA custody head</div>
+            <div class="digest-item-summary">JPM has appointed Sarah Mendelsohn (ex-STT EMEA Custody Head) to lead its European fund services expansion. The hire signals JPM's intent to compete more aggressively in continental fund administration, a segment where BNY and STT hold combined ~38% share.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t2">T2</span>
+              <span>Asset Servicing Times · May 16</span>
+              <span>·</span>
+              <a href="#">Ignites Europe analysis</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value med">MED</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon competitor"><span class="material-icons-outlined" style="font-size:16px">storefront</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">Northern Trust trims private markets fee schedule</div>
+            <div class="digest-item-summary">NTRS quietly revised published fee tiers for private markets fund administration, lowering the threshold for tier-2 pricing from $5B to $3B AUA. Suggests competitive pressure in the alts space and may foreshadow renewed RFP activity from mid-sized sponsors.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t2">T2</span>
+              <span>Funds Europe · May 13</span>
+              <span>·</span>
+              <a href="#">NTRS public fee schedule</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value med">MED</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Deals & mandates -->
+      <div class="digest-section">
+        <div class="digest-section-header">
+          <div class="digest-section-num">2</div>
+          <h2 class="digest-section-title">Deals &amp; mandates</h2>
+          <span class="digest-section-count">3 items</span>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon deal"><span class="material-icons-outlined" style="font-size:16px">attach_money</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">GIC awards $180B global custody mandate to State Street</div>
+            <div class="digest-item-summary">Singapore's sovereign wealth fund GIC has selected STT as global custodian for $180B in segregated portfolios, ending JPM's prior mandate. Decision reportedly driven by STT's Alpha platform integration story. RFP closed Q4 2025; transition over 18 months.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>STT 8-K · May 15</span>
+              <span>·</span>
+              <a href="#">Global Custodian</a>
+              <span>·</span>
+              <a href="#">Coalition Greenwich note</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon deal"><span class="material-icons-outlined" style="font-size:16px">handshake</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">CalPERS extends NTRS custody mandate through 2031</div>
+            <div class="digest-item-summary">CalPERS Board approved a six-year extension of its global custody arrangement with Northern Trust, $480B AUA. No RFP. Decision cited "operational continuity" and platform investments delivered under the current term.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>CalPERS Board minutes · May 12</span>
+              <span>·</span>
+              <a href="#">Pensions &amp; Investments</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value med">MED</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon deal"><span class="material-icons-outlined" style="font-size:16px">cancel</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">Allianz GI splits custody — BNY retains EMEA, JPM wins APAC</div>
+            <div class="digest-item-summary">Allianz Global Investors restructured its custody arrangements, retaining BNY for EMEA AUA (~$310B) and awarding APAC (~$140B) to JPM. Net: a partial loss but stable EMEA wallet. Allianz cited "regional specialisation" as the rationale.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t2">T2</span>
+              <span>Funds Europe · May 17</span>
+              <span>·</span>
+              <a href="#">Internal context: BNY EMEA win</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Regulatory & policy -->
+      <div class="digest-section">
+        <div class="digest-section-header">
+          <div class="digest-section-num">3</div>
+          <h2 class="digest-section-title">Regulatory &amp; policy</h2>
+          <span class="digest-section-count">3 items</span>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon regulatory"><span class="material-icons-outlined" style="font-size:16px">gavel</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">EU DORA first supervisory letter cycle lands at peers</div>
+            <div class="digest-item-summary">Both NTRS and JPM disclosed in 10-Q footnotes that they received supervisory remediation letters from EU competent authorities regarding DORA Article 28 third-party risk frameworks. Remediation programs underway. Expect equivalent scrutiny on BNY's posture.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>NTRS 10-Q · May 9</span>
+              <span>·</span>
+              <span>JPM 10-Q · May 12</span>
+              <span>·</span>
+              <a href="#">Risk.net analysis</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon regulatory"><span class="material-icons-outlined" style="font-size:16px">policy</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">SEC custody rule amendments: comment period extended</div>
+            <div class="digest-item-summary">SEC extended the comment period on proposed amendments to Rule 206(4)-2 (Custody Rule) by 60 days to August 2026, following industry pushback on the scope of "qualified custodian" definition for crypto assets. Industry trade associations expected to file consolidated comments.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>SEC release · May 15</span>
+              <span>·</span>
+              <a href="#">ICI member alert</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value med">MED</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon regulatory"><span class="material-icons-outlined" style="font-size:16px">public</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">FSB publishes guidance on tokenised collateral</div>
+            <div class="digest-item-summary">Financial Stability Board released cross-border guidance on collateral mobility for tokenised securities, signalling international supervisory convergence. Implementation expected via national regulators over 12–18 months. Material for our digital-asset custody roadmap.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>FSB publication · May 14</span>
+              <span>·</span>
+              <a href="#">Markets Media coverage</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value med">MED</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Technology -->
+      <div class="digest-section">
+        <div class="digest-section-header">
+          <div class="digest-section-num">4</div>
+          <h2 class="digest-section-title">Technology &amp; platforms</h2>
+          <span class="digest-section-count">3 items</span>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon tech"><span class="material-icons-outlined" style="font-size:16px">token</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">BlackRock BUIDL passes $2.1B; institutional custody integrations next</div>
+            <div class="digest-item-summary">BLK's tokenised money market fund BUIDL crossed $2.1B AUM, +28% MoM. CFO Martin Small said on the earnings call that "the next leg is institutional custody integrations" — direct adjacency to our digital-asset custody offering and worth a team conversation.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>BLK earnings call · May 11</span>
+              <span>·</span>
+              <a href="#">The Trade</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon tech"><span class="material-icons-outlined" style="font-size:16px">memory</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">JPM Kinexys volumes up 3.5x YoY; collateral mobility live</div>
+            <div class="digest-item-summary">JPM disclosed Kinexys (formerly Onyx) processed $2T in tokenised intraday repo transactions in Q1 2026, with collateral mobility now in production for three institutional clients. Suggests blockchain settlement is moving past pilot at scale at our largest custody competitor.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>JPM Investor Day · May 13</span>
+              <span>·</span>
+              <a href="#">Risk.net</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon tech"><span class="material-icons-outlined" style="font-size:16px">smart_toy</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">STT discloses generative AI program scope at investor day</div>
+            <div class="digest-item-summary">STT outlined "AlphaAI" program: client reporting automation, NAV exception handling, and DDQ response generation (the latter directly competitive with our Aria initiative). $200M committed investment through 2027.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t1">T1</span>
+              <span>STT Investor Day · May 14</span>
+              <span>·</span>
+              <a href="#">American Banker</a>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value high">HIGH</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 5: Talent watch -->
+      <div class="digest-section">
+        <div class="digest-section-header">
+          <div class="digest-section-num">5</div>
+          <h2 class="digest-section-title">Talent watch</h2>
+          <span class="digest-section-count">2 items</span>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon talent"><span class="material-icons-outlined" style="font-size:16px">person</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">STT names new Head of Global Markets, effective July 1</div>
+            <div class="digest-item-summary">STT promoted internal candidate Maria Vasconcelos to Head of Global Markets, succeeding Tom Klein (retiring). Vasconcelos previously ran FX. Signals continuity in the markets strategy.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t2">T2</span>
+              <span>STT press release · May 13</span>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value low">LOW</div>
+          </div>
+        </div>
+
+        <div class="digest-item">
+          <div class="digest-item-icon talent"><span class="material-icons-outlined" style="font-size:16px">trending_down</span></div>
+          <div class="digest-item-body">
+            <div class="digest-item-headline">BNP Paribas Securities Services loses APAC head to Standard Chartered</div>
+            <div class="digest-item-summary">BNP's APAC head of securities services has moved to Standard Chartered to lead their custody expansion. May open APAC mandate competition over next 12 months.</div>
+            <div class="digest-item-meta">
+              <span class="tier-badge t3">T3</span>
+              <span>eFinancialCareers · May 17</span>
+            </div>
+          </div>
+          <div class="digest-item-impact">
+            <div class="impact-label">Impact</div>
+            <div class="impact-value low">LOW</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tracking next week -->
+      <div class="card" style="margin-top:24px">
+        <div class="card-header">
+          <h3 class="card-title">What we're tracking next week</h3>
+          <span class="card-sub">From the analyst calendar</span>
+        </div>
+        <div class="card-body">
+          <div class="tracking-list">
+            <div class="tracking-item">
+              <span class="tracking-date">May 21</span>
+              <span class="tracking-text">JPM Securities Services investor day — expect detailed segment-level disclosures and Kinexys roadmap update</span>
+            </div>
+            <div class="tracking-item">
+              <span class="tracking-date">May 22</span>
+              <span class="tracking-text">ESMA expected to publish DORA Article 28 implementation guidance — affects EU third-party risk frameworks across all peers</span>
+            </div>
+            <div class="tracking-item">
+              <span class="tracking-date">May 23</span>
+              <span class="tracking-text">NTRS hosting institutional client conference (Chicago) — sessions on Alts servicing strategy worth monitoring</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Source footer -->
+      <div class="source-footer">
+        <strong>Sources used in this digest:</strong> 14 items synthesised from 23 underlying signals. All citations link to original publishers — please consult sources directly for full text.
+        <div class="source-counts">
+          <span class="source-count"><span class="n">5</span> peer filings (EDGAR / IR sites)</span>
+          <span class="source-count"><span class="n">3</span> Global Custodian</span>
+          <span class="source-count"><span class="n">2</span> Asset Servicing Times</span>
+          <span class="source-count"><span class="n">2</span> Funds Europe / Ignites</span>
+          <span class="source-count"><span class="n">2</span> Risk.net</span>
+          <span class="source-count"><span class="n">2</span> Pensions &amp; Investments</span>
+          <span class="source-count"><span class="n">3</span> regulator publications</span>
+          <span class="source-count"><span class="n">1</span> Coalition Greenwich</span>
+          <span class="source-count"><span class="n">3</span> trade press (T3)</span>
+        </div>
+        <div style="margin-top:12px; font-size:11px; color:var(--text-3)">
+          Cassia digest #247 · Sealed run_20260519T064842_ce91ad · Replay available · Reviewed by L. Chen (Asset Servicing CI Analyst)
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SCREEN 2 · Competitor Page (State Street drill-in) -->
+    <!-- ============================================================ -->
+    <div class="screen-marker">
+      <h2>Screen 2 · Competitor page</h2>
+      <p>One page per peer. Persistent view that's always current — library entries grouped by canonical topic, recent activity timeline, key metrics with trend, freshness badges on every entry so executives can see what's recent vs. stale at a glance.</p>
+    </div>
+
+    <div class="topbar">
+      <div class="breadcrumbs">
+        <a href="#">Intelligence</a>
+        <span class="sep">›</span>
+        <a href="#">Competitors</a>
+        <span class="sep">›</span>
+        <span class="current">State Street (STT)</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="lens-toggle">
+        <button class="active">Executive</button>
+        <button>Analyst</button>
+        <button>Editor</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="peer-hero">
+        <div class="peer-ident">
+          <div class="peer-logo">STT</div>
+          <div>
+            <div class="peer-ticker">NYSE · State Street Corporation</div>
+            <h1 class="peer-name">State Street</h1>
+            <div style="font-size:12px; color:#B4C7D6; margin-top:4px">Primary overlap: Custody · Asset servicing · Asset management</div>
+          </div>
+        </div>
+        <div class="peer-stats">
+          <div class="peer-stat">
+            <div class="l">AUC/A</div>
+            <div class="v">$44.3T</div>
+            <div class="d">+5.2% YoY</div>
+          </div>
+          <div class="peer-stat">
+            <div class="l">Alpha AUM</div>
+            <div class="v">$4.1T</div>
+            <div class="d">+14% QoQ</div>
+          </div>
+          <div class="peer-stat">
+            <div class="l">Library entries</div>
+            <div class="v">42</div>
+            <div class="d">3 stale</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="peer-tabs">
+        <div class="peer-tab active">Overview</div>
+        <div class="peer-tab">Strategy</div>
+        <div class="peer-tab">Custody</div>
+        <div class="peer-tab">Asset servicing</div>
+        <div class="peer-tab">Tech &amp; platform</div>
+        <div class="peer-tab">Governance</div>
+        <div class="peer-tab">Timeline</div>
+      </div>
+
+      <div class="peer-grid">
+        <!-- Main column -->
+        <div>
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <h3 class="card-title">Recent activity</h3>
+              <span class="card-sub">Last 30 days · 12 signals</span>
+            </div>
+            <div class="card-body">
+              <div class="timeline">
+                <div class="timeline-item major">
+                  <div class="timeline-date">May 14, 2026 · Investor Day</div>
+                  <div class="timeline-headline">Alpha platform crosses $4T AUM; AlphaAI program disclosed</div>
+                  <div class="timeline-summary">Multiple disclosures: Alpha AUM $4.1T (+14% QoQ), two new sovereign mandates, $200M AlphaAI program (incl. DDQ response generation — directly competitive with Aria).</div>
+                  <div class="timeline-source"><span class="tier-badge t1">T1</span> STT Investor Day · <a href="#">Library entries (3)</a></div>
+                </div>
+                <div class="timeline-item major">
+                  <div class="timeline-date">May 15, 2026 · 8-K</div>
+                  <div class="timeline-headline">GIC awards $180B custody mandate (won from JPM)</div>
+                  <div class="timeline-summary">Material customer win disclosure. Transition over 18 months. Industry coverage suggests Alpha integration was decisive factor.</div>
+                  <div class="timeline-source"><span class="tier-badge t1">T1</span> STT 8-K · <a href="#">Library entry</a></div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-date">May 13, 2026 · Press release</div>
+                  <div class="timeline-headline">New Head of Global Markets named</div>
+                  <div class="timeline-summary">Maria Vasconcelos promoted from FX head; signals continuity.</div>
+                  <div class="timeline-source"><span class="tier-badge t2">T2</span> STT press release</div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-date">Apr 26, 2026 · Q1 earnings</div>
+                  <div class="timeline-headline">Q1 2026 results: fee revenue +6.2%</div>
+                  <div class="timeline-summary">Beat on fee revenue, services fees +6.2% YoY, NII +3.1%, expense growth contained at 2.4%.</div>
+                  <div class="timeline-source"><span class="tier-badge t1">T1</span> STT 10-Q · <a href="#">Library entry</a></div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-date">Apr 22, 2026 · Earnings call</div>
+                  <div class="timeline-headline">CEO commentary on Alpha pipeline</div>
+                  <div class="timeline-summary">Pipeline described as "strongest in three years" with 14 active RFP processes covering ~$1.2T potential AUC.</div>
+                  <div class="timeline-source"><span class="tier-badge t1">T1</span> Earnings call transcript</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Library entries by topic</h3>
+              <span class="card-sub">42 entries · grouped by canonical topic</span>
+            </div>
+            <div class="card-body flush">
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">Alpha platform — status &amp; AUM</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.tech_platform.alpha</div>
+                </div>
+                <div class="topic-freshness">Fresh · 5d</div>
+                <span class="pill published">published</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">Custody AUC and market share</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.custody.market_share</div>
+                </div>
+                <div class="topic-freshness">Fresh · 4d</div>
+                <span class="pill published">published</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">Custody client wins and losses</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.custody.client_wins</div>
+                </div>
+                <div class="topic-freshness">Fresh · 4d</div>
+                <span class="pill published">published</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">Pricing &amp; fee compression commentary</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.custody.pricing_pressure</div>
+                </div>
+                <div class="topic-freshness stale">Stale · 94d</div>
+                <span class="pill review">review</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">AlphaAI program scope</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.tech_platform.alpha_ai</div>
+                </div>
+                <div class="topic-freshness">Fresh · 5d · NEW</div>
+                <span class="pill drafting">drafting</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">Tokenisation &amp; digital assets posture</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.tech_platform.tokenization</div>
+                </div>
+                <div class="topic-freshness stale">Stale · 102d</div>
+                <span class="pill review">review</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">Cloud &amp; infrastructure modernisation</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.tech_platform.cloud_program</div>
+                </div>
+                <div class="topic-freshness">Fresh · 31d</div>
+                <span class="pill published">published</span>
+              </div>
+              <div class="topic-row">
+                <div>
+                  <div class="topic-name">C-suite and board composition</div>
+                  <div class="topic-canon">canon.ci.competitor.STT.governance.leadership</div>
+                </div>
+                <div class="topic-freshness">Fresh · 6d</div>
+                <span class="pill published">published</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar metrics -->
+        <div>
+          <div class="metric-card" style="margin-bottom:12px">
+            <div class="metric-label">Alpha platform AUM</div>
+            <div class="metric-value">$4.1T</div>
+            <div class="metric-delta up">▲ +$500B vs YE 2025</div>
+            <div class="metric-sparkline">
+              <svg width="100%" height="48" viewBox="0 0 280 48" preserveAspectRatio="none">
+                <polyline points="0,40 40,38 80,34 120,30 160,28 200,22 240,16 280,8" fill="none" stroke="#2B9CAE" stroke-width="2"/>
+                <circle cx="280" cy="8" r="3" fill="#2B9CAE"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="metric-card" style="margin-bottom:12px">
+            <div class="metric-label">Custody AUC ($T)</div>
+            <div class="metric-value">$44.3T</div>
+            <div class="metric-delta up">▲ +5.2% YoY</div>
+            <div class="metric-sparkline">
+              <svg width="100%" height="48" viewBox="0 0 280 48" preserveAspectRatio="none">
+                <polyline points="0,32 40,30 80,28 120,28 160,24 200,22 240,20 280,18" fill="none" stroke="#2B9CAE" stroke-width="2"/>
+                <circle cx="280" cy="18" r="3" fill="#2B9CAE"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="metric-card" style="margin-bottom:12px">
+            <div class="metric-label">Services fee revenue ($M, quarterly)</div>
+            <div class="metric-value">$1,387M</div>
+            <div class="metric-delta up">▲ +6.2% YoY</div>
+            <div class="metric-sparkline">
+              <svg width="100%" height="48" viewBox="0 0 280 48" preserveAspectRatio="none">
+                <rect x="10" y="30" width="20" height="18" fill="#7FCAD5"/>
+                <rect x="40" y="26" width="20" height="22" fill="#7FCAD5"/>
+                <rect x="70" y="28" width="20" height="20" fill="#7FCAD5"/>
+                <rect x="100" y="22" width="20" height="26" fill="#7FCAD5"/>
+                <rect x="130" y="24" width="20" height="24" fill="#7FCAD5"/>
+                <rect x="160" y="20" width="20" height="28" fill="#7FCAD5"/>
+                <rect x="190" y="18" width="20" height="30" fill="#7FCAD5"/>
+                <rect x="220" y="14" width="20" height="34" fill="#2B9CAE"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card" style="padding:0">
+            <div class="card-header" style="padding:12px 16px"><h3 class="card-title" style="font-size:12px">BNY relative position</h3></div>
+            <div class="card-body" style="padding:12px 16px">
+              <div style="font-size:12px; color:var(--text-2); margin-bottom:8px">Custody AUC, top global custodians</div>
+              <div style="display:flex; flex-direction:column; gap:6px; font-size:12px">
+                <div style="display:flex; justify-content:space-between"><span>BNY</span><strong style="color:var(--teal)">$51.8T</strong></div>
+                <div style="display:flex; justify-content:space-between"><span>STT</span><strong>$44.3T</strong></div>
+                <div style="display:flex; justify-content:space-between"><span>JPM</span><strong>$32.4T</strong></div>
+                <div style="display:flex; justify-content:space-between"><span>Citi</span><strong>$27.6T</strong></div>
+                <div style="display:flex; justify-content:space-between"><span>NTRS</span><strong>$17.2T</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SCREEN 3 · Deals & Mandates -->
+    <!-- ============================================================ -->
+    <div class="screen-marker">
+      <h2>Screen 3 · Deals &amp; mandates</h2>
+      <p>The deal-flow tracker. Sortable, filterable, with explicit competitor-vs-competitor framing. Wins and losses surfaced with monetary value and the BNY angle (won from us, won against us, no overlap).</p>
+    </div>
+
+    <div class="topbar">
+      <div class="breadcrumbs">
+        <a href="#">Intelligence</a>
+        <span class="sep">›</span>
+        <span class="current">Deals &amp; mandates</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="lens-toggle">
+        <button class="active">Executive</button>
+        <button>Analyst</button>
+        <button>Editor</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Deals &amp; mandates</h1>
+          <div class="page-sub">Trailing 90 days · 14 new mandates · $1.1T AUC in motion</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn secondary">Export CSV</button>
+          <button class="btn primary">+ Log a deal</button>
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="kpi-label">Mandates won (peers)</div>
+          <div class="kpi-value">9</div>
+          <div class="kpi-delta good">$830B AUC</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Mandates lost (BNY)</div>
+          <div class="kpi-value">2</div>
+          <div class="kpi-delta bad">$320B AUC</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">RFPs in market</div>
+          <div class="kpi-value">7</div>
+          <div class="kpi-delta">est. $480B</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Top winner</div>
+          <div class="kpi-value">STT</div>
+          <div class="kpi-delta">$340B in trailing 90d</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Avg deal size</div>
+          <div class="kpi-value">$78B</div>
+          <div class="kpi-delta">vs $52B 90d prior</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="deals-controls">
+          <input class="filter-input" placeholder="Search client, custodian…">
+          <select class="filter-select"><option>All winners</option><option>STT</option><option>JPM</option><option>NTRS</option><option>BLK</option></select>
+          <select class="filter-select"><option>All segments</option><option>Custody</option><option>Fund admin</option><option>Middle office</option><option>Wealth</option></select>
+          <select class="filter-select"><option>All regions</option><option>Americas</option><option>EMEA</option><option>APAC</option></select>
+          <select class="filter-select"><option>Last 90 days</option><option>Last 30 days</option><option>YTD</option></select>
+          <div style="flex:1"></div>
+          <span style="font-size:11px; color:var(--text-2)">Sort: date ▾</span>
+        </div>
+        <div class="card-body flush">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Segment</th>
+                <th>Value</th>
+                <th>Outcome</th>
+                <th>Date</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">GIC (Singapore)</div>
+                  <div style="font-size:11px; color:var(--text-3)">Sovereign wealth · APAC</div>
+                </td>
+                <td>Global custody</td>
+                <td><span class="deal-value">$180B<span class="v-sub">AUC, 5yr</span></span></td>
+                <td><div class="deal-parties"><span class="winner">STT</span><span class="arrow">←</span><span class="loser">JPM</span></div><div style="font-size:11px; color:var(--text-3); margin-top:2px">BNY not in final round</div></td>
+                <td>May 15</td>
+                <td><span class="tier-badge t1">T1</span> STT 8-K</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">Allianz GI (APAC)</div>
+                  <div style="font-size:11px; color:var(--text-3)">Asset manager · APAC</div>
+                </td>
+                <td>Custody &amp; fund admin</td>
+                <td><span class="deal-value">$140B<span class="v-sub">AUC, 7yr</span></span></td>
+                <td><div class="deal-parties"><span class="winner">JPM</span><span class="arrow">←</span><span class="loser" style="color:var(--red)">BNY</span></div><div style="font-size:11px; color:var(--red); margin-top:2px; font-weight:600">Lost from BNY</div></td>
+                <td>May 17</td>
+                <td><span class="tier-badge t2">T2</span> Funds Europe</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">CalPERS</div>
+                  <div style="font-size:11px; color:var(--text-3)">Public pension · Americas</div>
+                </td>
+                <td>Global custody</td>
+                <td><span class="deal-value">$480B<span class="v-sub">AUA, 6yr renewal</span></span></td>
+                <td><div class="deal-parties"><span class="winner">NTRS</span><span class="arrow">↻</span><span style="color:var(--text-3)">renewed</span></div><div style="font-size:11px; color:var(--text-3); margin-top:2px">No RFP · incumbent retained</div></td>
+                <td>May 12</td>
+                <td><span class="tier-badge t1">T1</span> CalPERS minutes</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">Norges Bank IM</div>
+                  <div style="font-size:11px; color:var(--text-3)">Sovereign wealth · EMEA</div>
+                </td>
+                <td>Custody (Asia book)</td>
+                <td><span class="deal-value">$240B<span class="v-sub">AUC</span></span></td>
+                <td><div class="deal-parties"><span class="winner">STT</span><span class="arrow">←</span><span class="loser">Citi</span></div></td>
+                <td>Apr 28</td>
+                <td><span class="tier-badge t2">T2</span> Global Custodian</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">Brookfield Asset Mgmt</div>
+                  <div style="font-size:11px; color:var(--text-3)">Alts manager · Americas</div>
+                </td>
+                <td>Private markets fund admin</td>
+                <td><span class="deal-value">$45B<span class="v-sub">AUA</span></span></td>
+                <td><div class="deal-parties"><span class="winner">NTRS</span><span class="arrow">←</span><span style="color:var(--teal)">new mandate</span></div></td>
+                <td>Apr 22</td>
+                <td><span class="tier-badge t2">T2</span> Pensions &amp; Investments</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">Future Fund (Australia)</div>
+                  <div style="font-size:11px; color:var(--text-3)">Sovereign wealth · APAC</div>
+                </td>
+                <td>Middle office outsourcing</td>
+                <td><span class="deal-value">$210B<span class="v-sub">AUM scope</span></span></td>
+                <td><div class="deal-parties"><span style="color:var(--amber); font-weight:600">RFP</span><span style="color:var(--text-3); margin-left:6px">3 finalists incl. BNY</span></div></td>
+                <td>Apr 18</td>
+                <td><span class="tier-badge t1">T1</span> Future Fund disclosure</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight:600; color:var(--navy)">Allianz GI (EMEA)</div>
+                  <div style="font-size:11px; color:var(--text-3)">Asset manager · EMEA</div>
+                </td>
+                <td>Custody &amp; fund admin</td>
+                <td><span class="deal-value">$310B<span class="v-sub">AUC, 7yr renewal</span></span></td>
+                <td><div class="deal-parties"><span class="winner" style="color:var(--teal)">BNY</span><span class="arrow">↻</span><span style="color:var(--text-3)">renewed</span></div><div style="font-size:11px; color:var(--teal); margin-top:2px; font-weight:600">Retained from us</div></td>
+                <td>Apr 14</td>
+                <td><span class="tier-badge t2">T2</span> Funds Europe</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SCREEN 4 · Source Health (Analyst view) -->
+    <!-- ============================================================ -->
+    <div class="screen-marker">
+      <h2>Screen 4 · Source health</h2>
+      <p>Analyst-only surface. One row per licensed source with last-fetch timestamp, license status, items pulled, and connector errors. The compliance hinge — surfaces ToS issues, credential expiries, and license renewals before they break the digest.</p>
+    </div>
+
+    <div class="topbar">
+      <div class="breadcrumbs">
+        <a href="#">Analyst</a>
+        <span class="sep">›</span>
+        <span class="current">Source health</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="lens-toggle">
+        <button>Executive</button>
+        <button class="active">Analyst</button>
+        <button>Editor</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Source health</h1>
+          <div class="page-sub">14 licensed sources · 12 healthy · 1 degraded · 1 license review needed</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn secondary">Source license registry</button>
+          <button class="btn primary">+ Onboard new source</button>
+        </div>
+      </div>
+
+      <div class="banner red">
+        <strong class="b-title">Action required:</strong>
+        Ignites Europe license expires May 31 — procurement renewal not yet initiated. Connector will halt automatically; weekly digest will lose ~3 items/week if not resolved.
+        <div class="b-spacer"></div>
+        <a href="#">Open ticket with procurement →</a>
+      </div>
+
+      <div class="banner amber">
+        <strong class="b-title">Degraded:</strong>
+        Global Custodian connector saw 3 consecutive auth failures since May 17 02:00 UTC. Likely credential refresh needed. Failover to mailbox digest active — no content loss this week.
+        <div class="b-spacer"></div>
+        <a href="#">Investigate →</a>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Licensed sources</h3>
+          <span class="card-sub">By tier · sorted by last fetch</span>
+        </div>
+        <div class="card-body flush">
+          <div style="padding:12px 20px; background:#F8FBFC; border-bottom:1px solid var(--border-2); font-size:11px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.05em; display:grid; grid-template-columns:32px 1fr 120px 100px 80px 100px; gap:16px; font-weight:600">
+            <div></div>
+            <div>Source</div>
+            <div>Access</div>
+            <div>Items 7d</div>
+            <div>Tier</div>
+            <div>Health</div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon api">API</div>
+            <div>
+              <div class="source-name">Coalition Greenwich</div>
+              <div class="source-meta">Last fetch: 14m ago · Institutional research feed</div>
+            </div>
+            <div class="source-stat">Authenticated API<div class="sub">License: Enterprise · exp Dec 2026</div></div>
+            <div class="source-stat">8<div class="sub">structured reports</div></div>
+            <div><span class="tier-badge t1">T1</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon api">API</div>
+            <div>
+              <div class="source-name">FT Professional</div>
+              <div class="source-meta">Last fetch: 8m ago · 23 named users</div>
+            </div>
+            <div class="source-stat">Authenticated API<div class="sub">License: Enterprise · exp Oct 2026</div></div>
+            <div class="source-stat">47<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon mailbox">MAIL</div>
+            <div>
+              <div class="source-name">Global Custodian</div>
+              <div class="source-meta">Last successful fetch: 3d ago · 3 auth failures since</div>
+            </div>
+            <div class="source-stat">Authorized digest email<div class="sub">License: Corporate · exp Aug 2026</div></div>
+            <div class="source-stat">12<div class="sub">via mailbox failover</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot amber">Degraded</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon mailbox">MAIL</div>
+            <div>
+              <div class="source-name">Asset Servicing Times</div>
+              <div class="source-meta">Last fetch: 22m ago · Daily digest mailbox</div>
+            </div>
+            <div class="source-stat">Authorized digest email<div class="sub">License: Corporate · exp Apr 2027</div></div>
+            <div class="source-stat">9<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon mailbox">MAIL</div>
+            <div>
+              <div class="source-name">Ignites Europe (FT Specialist)</div>
+              <div class="source-meta">Last fetch: 1h ago · Will halt May 31 unless renewed</div>
+            </div>
+            <div class="source-stat">Authorized digest email<div class="sub" style="color:var(--red); font-weight:600">License expires May 31</div></div>
+            <div class="source-stat">11<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot red">License</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon mailbox">MAIL</div>
+            <div>
+              <div class="source-name">Funds Europe</div>
+              <div class="source-meta">Last fetch: 47m ago · Daily digest</div>
+            </div>
+            <div class="source-stat">Authorized digest email<div class="sub">License: Corporate · exp Feb 2027</div></div>
+            <div class="source-stat">7<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon mailbox">MAIL</div>
+            <div>
+              <div class="source-name">Pensions &amp; Investments</div>
+              <div class="source-meta">Last fetch: 26m ago · 5 named users</div>
+            </div>
+            <div class="source-stat">Authorized digest email<div class="sub">License: Multi-seat · exp Sep 2026</div></div>
+            <div class="source-stat">6<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon mailbox">MAIL</div>
+            <div>
+              <div class="source-name">Risk.net</div>
+              <div class="source-meta">Last fetch: 19m ago · Daily digest + topic alerts</div>
+            </div>
+            <div class="source-stat">Authorized digest email<div class="sub">License: Enterprise · exp Jan 2027</div></div>
+            <div class="source-stat">14<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t2">T2</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon api">API</div>
+            <div>
+              <div class="source-name">SEC EDGAR</div>
+              <div class="source-meta">Last fetch: 4m ago · Free, public</div>
+            </div>
+            <div class="source-stat">Public API<div class="sub">No license required</div></div>
+            <div class="source-stat">23<div class="sub">filings ingested</div></div>
+            <div><span class="tier-badge t1">T1</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+
+          <div class="source-row">
+            <div class="source-icon browser">WEB</div>
+            <div>
+              <div class="source-name">Markets Media</div>
+              <div class="source-meta">Last fetch: 1h ago · ToS-permitted automated read</div>
+            </div>
+            <div class="source-stat">Headless browser<div class="sub">License: Corporate · exp Mar 2027</div></div>
+            <div class="source-stat">4<div class="sub">articles indexed</div></div>
+            <div><span class="tier-badge t3">T3</span></div>
+            <div><span class="health-dot green">Healthy</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SCREEN 5 · Digest Review (Friday afternoon analyst surface) -->
+    <!-- ============================================================ -->
+    <div class="screen-marker">
+      <h2>Screen 5 · Digest review</h2>
+      <p>The analyst's Friday afternoon working surface. Cassia has drafted personalised digests for each recipient; the analyst previews, edits, approves per-recipient or in bulk, then schedules Monday 07:00 delivery. The Friday-compose / Monday-send gap is the trust anchor.</p>
+    </div>
+
+    <div class="topbar">
+      <div class="breadcrumbs">
+        <a href="#">Analyst</a>
+        <span class="sep">›</span>
+        <span class="current">Digest review · Issue #247</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="lens-toggle">
+        <button>Executive</button>
+        <button>Analyst</button>
+        <button class="active">Editor</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <div class="banner teal">
+        <strong class="b-title">Ready for review:</strong>
+        14 personalised digests drafted. Bulk approve 11 (no edits suggested), 3 flagged for analyst attention (consistency / freshness). Send window opens Monday 07:00 local per recipient timezone.
+        <div class="b-spacer"></div>
+        <span style="color:var(--text-2)">Send queue · 0 approved, 14 pending</span>
+      </div>
+
+      <div class="review-grid">
+
+        <!-- Recipient list -->
+        <div>
+          <div class="card">
+            <div class="card-header" style="padding:12px 16px">
+              <h3 class="card-title" style="font-size:12px">Recipients · 14</h3>
+              <span style="font-size:10px; color:var(--text-2)">Issue #247</span>
+            </div>
+            <div class="card-body flush">
+              <div class="recipient-list" style="border:none">
+                <div class="recipient-item active">
+                  <div class="recipient-avatar">RC</div>
+                  <div>
+                    <div class="recipient-name">R. Chowdhury</div>
+                    <div class="recipient-role">Head of Custody</div>
+                  </div>
+                  <span class="pill drafting recipient-flag">drafted</span>
+                </div>
+                <div class="recipient-item">
+                  <div class="recipient-avatar">MO</div>
+                  <div>
+                    <div class="recipient-name">M. Okonkwo</div>
+                    <div class="recipient-role">Head of Fund Services</div>
+                  </div>
+                  <span class="pill review recipient-flag">review</span>
+                </div>
+                <div class="recipient-item">
+                  <div class="recipient-avatar">SP</div>
+                  <div>
+                    <div class="recipient-name">S. Patel</div>
+                    <div class="recipient-role">Head of AS, EMEA</div>
+                  </div>
+                  <span class="pill drafting recipient-flag">drafted</span>
+                </div>
+                <div class="recipient-item">
+                  <div class="recipient-avatar">JK</div>
+                  <div>
+                    <div class="recipient-name">J. Kowalski</div>
+                    <div class="recipient-role">Head of Alts Servicing</div>
+                  </div>
+                  <span class="pill review recipient-flag">review</span>
+                </div>
+                <div class="recipient-item">
+                  <div class="recipient-avatar">HW</div>
+                  <div>
+                    <div class="recipient-name">H. Wong</div>
+                    <div class="recipient-role">Head of AS, APAC</div>
+                  </div>
+                  <span class="pill drafting recipient-flag">drafted</span>
+                </div>
+                <div class="recipient-item">
+                  <div class="recipient-avatar">EM</div>
+                  <div>
+                    <div class="recipient-name">E. Martinez</div>
+                    <div class="recipient-role">Chief Commercial Officer</div>
+                  </div>
+                  <span class="pill review recipient-flag">review</span>
+                </div>
+                <div class="recipient-item">
+                  <div class="recipient-avatar">DT</div>
+                  <div>
+                    <div class="recipient-name">D. Thomas</div>
+                    <div class="recipient-role">Head of Platform Strategy</div>
+                  </div>
+                  <span class="pill drafting recipient-flag">drafted</span>
+                </div>
+              </div>
+              <div style="padding:10px 14px; background:#F8FBFC; border-top:1px solid var(--border-2); font-size:11px; color:var(--text-2); text-align:center; cursor:pointer">
+                + 7 more recipients
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <button class="btn primary" style="width:100%; justify-content:center">Bulk approve 11 drafted</button>
+          </div>
+        </div>
+
+        <!-- Email preview -->
+        <div>
+          <div class="email-preview">
+            <div style="margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--border)">
+              <div class="email-from">From: cassia@bny.com · Cassia Market Intelligence</div>
+              <h2 class="email-subject">Asset Servicing Weekly · Week of May 19, 2026</h2>
+              <div class="email-to">To: R. Chowdhury, Head of Custody · Personalised: Custody focus</div>
+            </div>
+
+            <div class="email-body">
+              <div style="background:#F8FBFC; border-left:3px solid var(--teal); padding:14px 16px; border-radius:4px; margin-bottom:18px">
+                <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-2); font-weight:600; margin-bottom:6px">90 seconds</div>
+                <div style="font-size:13px; line-height:1.6; color:var(--text)">Three things stood out this week. <strong>State Street</strong> disclosed Alpha platform AUM crossed $4T at investor day, materially ahead of consensus, and tied it to two new sovereign mandates. <strong>EU DORA</strong> implementation deadline saw the first supervisory letter cycle land at peers — Northern Trust and JPM disclosed remediation programmes in 10-Q footnotes. And <strong>BlackRock's BUIDL</strong> tokenised cash fund passed $2.1B, with their CFO signalling institutional custody integrations are the next leg.</div>
+              </div>
+
+              <div class="email-section-title">1 · Competitor moves</div>
+
+              <div class="email-bullet">
+                <div class="email-bullet-head">State Street Alpha crosses $4T AUM at investor day</div>
+                <div class="email-bullet-text">STT disclosed Alpha platform AUM of $4.1T at May 14 investor day, up from $3.6T at year-end, and announced two new sovereign mandates.</div>
+                <div class="email-bullet-link">Source: <a href="#">STT Investor Day deck</a> · <a href="#">Global Custodian coverage</a></div>
+              </div>
+
+              <div class="email-bullet">
+                <div class="email-bullet-head">JPM Securities Services hires former STT EMEA custody head</div>
+                <div class="email-bullet-text">Sarah Mendelsohn to lead European fund services expansion at JPM. Signals more aggressive JPM competition in continental fund administration.</div>
+                <div class="email-bullet-link">Source: <a href="#">Asset Servicing Times</a></div>
+              </div>
+
+              <div class="email-bullet">
+                <div class="email-bullet-head">Northern Trust trims private markets fee schedule</div>
+                <div class="email-bullet-text">NTRS lowered tier-2 pricing threshold from $5B to $3B AUA, suggesting competitive pressure in alts.</div>
+                <div class="email-bullet-link">Source: <a href="#">Funds Europe</a></div>
+              </div>
+
+              <div class="email-section-title">2 · Deals &amp; mandates</div>
+
+              <div class="email-bullet">
+                <div class="email-bullet-head">GIC awards $180B global custody mandate to State Street</div>
+                <div class="email-bullet-text">Decision reportedly driven by STT Alpha integration story. Replaces JPM. 18-month transition.</div>
+                <div class="email-bullet-link">Source: <a href="#">STT 8-K</a> · <a href="#">Coalition Greenwich note</a></div>
+              </div>
+
+              <div style="margin-top:24px; padding:14px; background:#F8FBFC; border-radius:6px; font-size:11px; color:var(--text-3); text-align:center">
+                [...remaining sections preview truncated · full email continues with sections 3–5 and "Tracking next week"...]
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="review-sidebar">
+          <div class="side-card">
+            <h4>Editor actions</h4>
+            <div class="btn-row stack">
+              <button class="btn primary"><span class="material-icons-outlined" style="font-size:15px">check</span>Approve for R. Chowdhury</button>
+              <button class="btn secondary"><span class="material-icons-outlined" style="font-size:15px">edit</span>Edit before approve</button>
+              <button class="btn secondary"><span class="material-icons-outlined" style="font-size:15px">refresh</span>Regenerate</button>
+              <button class="btn danger"><span class="material-icons-outlined" style="font-size:15px">block</span>Hold</button>
+            </div>
+          </div>
+
+          <div class="side-card">
+            <h4>Source tier mix</h4>
+            <div class="tier-mix-bar">
+              <div class="seg t1" style="width:54%"></div>
+              <div class="seg t2" style="width:32%"></div>
+              <div class="seg t3" style="width:14%"></div>
+              <div class="seg t4" style="width:0%"></div>
+            </div>
+            <div class="tier-mix-legend">
+              <span><i style="background:var(--green)"></i>T1 54%</span>
+              <span><i style="background:var(--teal)"></i>T2 32%</span>
+              <span><i style="background:var(--text-3)"></i>T3 14%</span>
+            </div>
+            <div style="margin-top:10px; padding:8px 10px; background:var(--green-bg); color:var(--green); font-size:11px; border-radius:4px; font-weight:600">
+              ✓ 86% T1/T2 · Executive policy met (≥80%)
+            </div>
+          </div>
+
+          <div class="side-card">
+            <h4>Validation</h4>
+            <div class="meta-row"><span class="meta-label">Citations</span><span class="meta-value" style="color:var(--green)">23/23 pass</span></div>
+            <div class="meta-row"><span class="meta-label">Recency</span><span class="meta-value" style="color:var(--green)">all in window</span></div>
+            <div class="meta-row"><span class="meta-label">Consistency</span><span class="meta-value" style="color:var(--green)">pass</span></div>
+            <div class="meta-row"><span class="meta-label">IP / fair use</span><span class="meta-value" style="color:var(--green)">no quotes &gt; 25w</span></div>
+            <div class="meta-row"><span class="meta-label">Tier mix</span><span class="meta-value" style="color:var(--green)">86% T1/T2</span></div>
+          </div>
+
+          <div class="side-card">
+            <h4>Run identifiers</h4>
+            <div class="meta-row"><span class="meta-label">issue</span><span class="meta-value mono">247</span></div>
+            <div class="meta-row"><span class="meta-label">run_id</span><span class="meta-value mono">run_20260516T164831</span></div>
+            <div class="meta-row"><span class="meta-label">recipient</span><span class="meta-value mono">rec_rchowdhury</span></div>
+            <div class="meta-row"><span class="meta-label">profile</span><span class="meta-value mono">prof_custody_v3</span></div>
+            <div class="meta-row"><span class="meta-label">taxonomy</span><span class="meta-value mono">tx_ci_v0.4</span></div>
+            <div class="meta-row"><span class="meta-label">library</span><span class="meta-value mono">lib_ci_v0.4</span></div>
+          </div>
+
+          <div class="side-card">
+            <h4>Send schedule</h4>
+            <div class="meta-row"><span class="meta-label">Recipient TZ</span><span class="meta-value">America/New_York</span></div>
+            <div class="meta-row"><span class="meta-label">Delivery</span><span class="meta-value">Mon May 19 · 07:00 EDT</span></div>
+            <div class="meta-row"><span class="meta-label">Channel</span><span class="meta-value">Email + portal</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
