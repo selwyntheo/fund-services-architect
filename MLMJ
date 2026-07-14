@@ -1,0 +1,422 @@
+import React, { useState, useMemo, useRef } from "react";
+import { Plus, Trash2, Copy, Download, Check, GripVertical, Eye, Settings2, Image as ImageIcon, FolderPlus } from "lucide-react";
+
+/*
+  BNY NEWS BRIEF — Newsletter Builder v2
+  ------------------------------------------------------------------
+  Adds: section-grouping layer (headed category bands),
+        per-item logo image slots, dual export (HTML + MJML).
+  Left = editor. Right = live preview (twin of exported HTML).
+  Font: Avenir Next (email-safe fallbacks). Palette: BNY 2025 system.
+*/
+
+const BRAND = {
+  navy: "#141E46", navy2: "#1E2A5E", ink: "#2A2D34", slate: "#5B6470",
+  gold: "#B07E25", goldSoft: "#F3E9D6", line: "#E4E7EC", wash: "#F5F6F8",
+};
+const FONT_STACK =
+  '"Avenir Next","Avenir",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif';
+
+let uid = 100;
+const nid = (p) => `${p}${uid++}`;
+
+const seed = {
+  masthead: {
+    kicker: "Asset Servicing · Commercial Strategy",
+    title: "News Brief",
+    dateRange: "April 20 – 24, 2026",
+    summary:
+      "State Street advances tokenised fund servicing and AI delivery; Northern Trust wins $15B SCERS multi-service mandate; Citi retains A$150B Hostplus custody mandate; SEC & CFTC raise Form PF thresholds; Abbott shifts $15.7B retirement plan to Fidelity; CACEIS expands Triodos ESG servicing; Amundi launches bitcoin ETP with CACEIS digital custody.",
+  },
+  sections: [
+    {
+      id: "s1",
+      title: "Industry Mandates & Strategic News",
+      items: [
+        { id: "i1", org: "State Street", date: "Apr 24", logo: "", body: "CEO Ron O'Hanley confirmed the firm is actively supporting client launches of tokenised fund strategies expected to go live in 2026. State Street is advancing digital-asset infrastructure, including DTCC tokenisation initiatives and Fnality's blockchain-based payment network. AI-enabled servicing is moving to production, with agent-based service delivery scheduled to go live in July via its internal AI Foundry programme.", link: "#" },
+        { id: "i2", org: "Northern Trust", date: "Apr 23", logo: "", body: "Appointed by Sacramento County Employees' Retirement System (SCERS) to deliver global custody, securities lending, and fund accounting for approximately $15 billion in assets. The mandate consolidates custody, lending, and accounting/reporting into a single servicing model for the US public pension.", link: "#" },
+        { id: "i3", org: "Citi", date: "Apr 21", logo: "", body: "Renewed its custody and fund administration mandate with Hostplus for a further five years following a competitive tender, covering one of Australia's largest superannuation funds with over A$150 billion in assets. Citi retains the relationship as incumbent, continuing a partnership spanning more than a decade.", link: "#" },
+      ],
+    },
+    {
+      id: "s2",
+      title: "Regulatory & Market Structure",
+      items: [
+        { id: "i4", org: "SEC & CFTC", date: "Apr 22", logo: "", body: "Regulators raised Form PF reporting thresholds, easing filing burdens for a segment of private fund advisers while preserving systemic-risk visibility for the largest managers.", link: "#" },
+      ],
+    },
+  ],
+};
+
+export default function App() {
+  const [model, setModel] = useState(seed);
+  const [tab, setTab] = useState("content");
+  const [showPreview, setShowPreview] = useState(true);
+  const [accent, setAccent] = useState(BRAND.gold);
+  const [headerStyle, setHeaderStyle] = useState("gradient");
+  const [format, setFormat] = useState("html"); // html | mjml
+  const [copied, setCopied] = useState(false);
+
+  const dragItem = useRef(null);
+  const dragOverItem = useRef(null);
+  const dragCtx = useRef(null);
+
+  const setMast = (k, v) => setModel((m) => ({ ...m, masthead: { ...m.masthead, [k]: v } }));
+  const setSection = (sid, k, v) => setModel((m) => ({ ...m, sections: m.sections.map((s) => (s.id === sid ? { ...s, [k]: v } : s)) }));
+  const addSection = () => setModel((m) => ({ ...m, sections: [...m.sections, { id: nid("s"), title: "New Section", items: [] }] }));
+  const removeSection = (sid) => setModel((m) => ({ ...m, sections: m.sections.filter((s) => s.id !== sid) }));
+  const setItem = (sid, iid, k, v) => setModel((m) => ({ ...m, sections: m.sections.map((s) => s.id === sid ? { ...s, items: s.items.map((it) => (it.id === iid ? { ...it, [k]: v } : it)) } : s) }));
+  const addItem = (sid) => setModel((m) => ({ ...m, sections: m.sections.map((s) => s.id === sid ? { ...s, items: [...s.items, { id: nid("i"), org: "New Organisation", date: "Apr 25", logo: "", body: "Add the update here.", link: "#" }] } : s) }));
+  const removeItem = (sid, iid) => setModel((m) => ({ ...m, sections: m.sections.map((s) => (s.id === sid ? { ...s, items: s.items.filter((it) => it.id !== iid) } : s)) }));
+
+  const reorderItem = () => {
+    const sid = dragCtx.current;
+    if (sid == null || dragItem.current == null || dragOverItem.current == null) return;
+    setModel((m) => ({
+      ...m,
+      sections: m.sections.map((s) => {
+        if (s.id !== sid) return s;
+        const items = [...s.items];
+        const [moved] = items.splice(dragItem.current, 1);
+        items.splice(dragOverItem.current, 0, moved);
+        return { ...s, items };
+      }),
+    }));
+    dragItem.current = dragOverItem.current = dragCtx.current = null;
+  };
+
+  const output = useMemo(
+    () => (format === "mjml" ? buildMjml(model, { accent, headerStyle }) : buildEmailHtml(model, { accent, headerStyle })),
+    [model, accent, headerStyle, format]
+  );
+
+  const copyOut = async () => { try { await navigator.clipboard.writeText(output); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {} };
+  const downloadOut = () => {
+    const blob = new Blob([output], { type: format === "mjml" ? "text/plain" : "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = format === "mjml" ? "bny-news-brief.mjml" : "bny-news-brief.html";
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div style={{ fontFamily: FONT_STACK, background: BRAND.wash, minHeight: "100vh", color: BRAND.ink }}>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: BRAND.navy, color: "#fff", position: "sticky", top: 0, zIndex: 20, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontWeight: 700, letterSpacing: "0.14em", fontSize: 15 }}>BNY</span>
+          <span style={{ width: 1, height: 18, background: "rgba(255,255,255,0.28)" }} />
+          <span style={{ fontSize: 13, opacity: 0.85 }}>News Brief Builder</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: 2, border: "1px solid rgba(255,255,255,0.2)" }}>
+            {["html", "mjml"].map((f) => (
+              <button key={f} onClick={() => setFormat(f)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, cursor: "pointer", border: "none", fontFamily: FONT_STACK, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, background: format === f ? "#fff" : "transparent", color: format === f ? BRAND.navy : "#fff" }}>{f}</button>
+            ))}
+          </div>
+          <button onClick={() => setShowPreview((s) => !s)} style={ghostBtn}><Eye size={15} /> {showPreview ? "Hide" : "Show"}</button>
+          <button onClick={copyOut} style={ghostBtn}>{copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copied" : "Copy"}</button>
+          <button onClick={downloadOut} style={{ ...ghostBtn, background: accent, borderColor: accent, color: "#fff" }}><Download size={15} /> Export</button>
+        </div>
+      </header>
+
+      <div style={{ display: "grid", gridTemplateColumns: showPreview ? "minmax(360px,460px) 1fr" : "1fr" }}>
+        <aside style={{ borderRight: `1px solid ${BRAND.line}`, background: "#fff", minHeight: "calc(100vh - 56px)" }}>
+          <div style={{ display: "flex", borderBottom: `1px solid ${BRAND.line}` }}>
+            <TabBtn active={tab === "content"} onClick={() => setTab("content")} icon={<Settings2 size={15} />} label="Content" />
+            <TabBtn active={tab === "theme"} onClick={() => setTab("theme")} icon={<Eye size={15} />} label="Theme" />
+          </div>
+
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 22 }}>
+            {tab === "content" ? (
+              <>
+                <Group label="Masthead">
+                  <Field label="Kicker / eyebrow" value={model.masthead.kicker} onChange={(v) => setMast("kicker", v)} />
+                  <Field label="Title" value={model.masthead.title} onChange={(v) => setMast("title", v)} />
+                  <Field label="Date range" value={model.masthead.dateRange} onChange={(v) => setMast("dateRange", v)} />
+                  <Field label="Summary" area value={model.masthead.summary} onChange={(v) => setMast("summary", v)} />
+                </Group>
+
+                <Group label={`Sections (${model.sections.length})`} action={<button onClick={addSection} style={miniBtn}><FolderPlus size={14} /> Section</button>}>
+                  {model.sections.map((s) => (
+                    <div key={s.id} style={{ border: `1px solid ${BRAND.line}`, borderRadius: 12, marginBottom: 16, overflow: "hidden" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: BRAND.navy }}>
+                        <input value={s.title} onChange={(e) => setSection(s.id, "title", e.target.value)} style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#fff", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 6, padding: "6px 8px", fontFamily: FONT_STACK, outline: "none" }} />
+                        <button onClick={() => removeSection(s.id)} style={{ ...miniBtn, background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "rgba(255,255,255,0.25)" }}><Trash2 size={13} /></button>
+                      </div>
+                      <div style={{ padding: 12 }}>
+                        {s.items.map((it, idx) => (
+                          <div key={it.id} draggable onDragStart={() => { dragItem.current = idx; dragCtx.current = s.id; }} onDragEnter={() => (dragOverItem.current = idx)} onDragEnd={reorderItem} onDragOver={(e) => e.preventDefault()}
+                            style={{ border: `1px solid ${BRAND.line}`, borderRadius: 10, padding: 12, marginBottom: 10, background: BRAND.wash }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                              <span style={{ display: "flex", alignItems: "center", gap: 6, color: BRAND.slate, fontSize: 12 }}><GripVertical size={14} style={{ cursor: "grab" }} /> Item {idx + 1}</span>
+                              <button onClick={() => removeItem(s.id, it.id)} style={{ ...miniBtn, color: "#B4232A", borderColor: "#F0D2D3" }}><Trash2 size={13} /></button>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 84px", gap: 8 }}>
+                              <Field compact label="Organisation" value={it.org} onChange={(v) => setItem(s.id, it.id, "org", v)} />
+                              <Field compact label="Date" value={it.date} onChange={(v) => setItem(s.id, it.id, "date", v)} />
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                              <div style={{ flex: 1 }}>
+                                <Field compact label="Logo image URL" value={it.logo} onChange={(v) => setItem(s.id, it.id, "logo", v)} placeholder="https://…/logo.png" />
+                              </div>
+                              <LogoPreview src={it.logo} />
+                            </div>
+                            <Field compact area label="Body" value={it.body} onChange={(v) => setItem(s.id, it.id, "body", v)} />
+                            <Field compact label="Link URL" value={it.link} onChange={(v) => setItem(s.id, it.id, "link", v)} />
+                          </div>
+                        ))}
+                        <button onClick={() => addItem(s.id)} style={{ ...miniBtn, width: "100%", justifyContent: "center", padding: "8px 0" }}><Plus size={14} /> Add item</button>
+                      </div>
+                    </div>
+                  ))}
+                </Group>
+              </>
+            ) : (
+              <>
+                <Group label="Header treatment">
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["gradient", "solid", "rule"].map((st) => (
+                      <button key={st} onClick={() => setHeaderStyle(st)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, fontSize: 12, textTransform: "capitalize", cursor: "pointer", border: `1px solid ${headerStyle === st ? BRAND.navy : BRAND.line}`, background: headerStyle === st ? BRAND.navy : "#fff", color: headerStyle === st ? "#fff" : BRAND.ink }}>{st}</button>
+                    ))}
+                  </div>
+                </Group>
+                <Group label="Accent colour">
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {[BRAND.gold, BRAND.navy2, "#0B6E4F", "#8A2432", "#C46A18"].map((c) => (
+                      <button key={c} onClick={() => setAccent(c)} aria-label={`Accent ${c}`} style={{ width: 34, height: 34, borderRadius: 8, background: c, cursor: "pointer", border: accent === c ? `2px solid ${BRAND.ink}` : `1px solid ${BRAND.line}` }} />
+                    ))}
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.slate }}>
+                      <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} style={{ width: 34, height: 34, border: "none", background: "none", cursor: "pointer" }} /> Custom
+                    </label>
+                  </div>
+                </Group>
+                <Group label="Export format">
+                  <p style={{ fontSize: 12.5, color: BRAND.slate, lineHeight: 1.6, margin: 0 }}>
+                    <strong>HTML</strong> — ready-to-send, table-based, inline-styled. Renders in Outlook, Gmail, Apple Mail.<br /><br />
+                    <strong>MJML</strong> — source for the MJML compiler / pipeline. Cleaner to maintain and version; compile server-side before sending. Toggle in the top bar.
+                  </p>
+                </Group>
+              </>
+            )}
+          </div>
+        </aside>
+
+        {showPreview && (
+          <main style={{ padding: 28, overflow: "auto" }}>
+            <Preview model={model} accent={accent} headerStyle={headerStyle} />
+          </main>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Preview({ model, accent, headerStyle }) {
+  const headerBg = headerStyle === "gradient" ? `linear-gradient(135deg, ${BRAND.navy} 0%, ${BRAND.navy2} 100%)` : headerStyle === "solid" ? BRAND.navy : "#fff";
+  const headerColor = headerStyle === "rule" ? BRAND.navy : "#fff";
+  return (
+    <div style={{ maxWidth: 680, margin: "0 auto", boxShadow: "0 2px 24px rgba(20,30,70,0.10)", borderRadius: 14, overflow: "hidden", background: "#fff", fontFamily: FONT_STACK }}>
+      <div style={{ background: headerBg, color: headerColor, padding: "34px 40px 30px", borderBottom: headerStyle === "rule" ? `3px solid ${accent}` : "none" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+          <span style={{ fontWeight: 700, letterSpacing: "0.16em", fontSize: 17 }}>BNY</span>
+          <span style={{ width: 1, height: 16, background: headerStyle === "rule" ? BRAND.line : "rgba(255,255,255,0.3)" }} />
+          <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", opacity: 0.85 }}>{model.masthead.kicker}</span>
+        </div>
+        <h1 style={{ margin: 0, fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.05 }}>{model.masthead.title}</h1>
+        <div style={{ marginTop: 12, display: "inline-block", padding: "5px 12px", borderRadius: 20, fontSize: 12.5, fontWeight: 600, background: headerStyle === "rule" ? BRAND.goldSoft : "rgba(255,255,255,0.14)", color: headerStyle === "rule" ? accent : "#fff" }}>{model.masthead.dateRange}</div>
+      </div>
+
+      <div style={{ padding: "22px 40px", borderLeft: `4px solid ${accent}`, background: BRAND.wash }}>
+        <div style={{ fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: accent, fontWeight: 700, marginBottom: 8 }}>This week at a glance</div>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: BRAND.ink }}>{model.masthead.summary}</p>
+      </div>
+
+      {model.sections.map((s) => (
+        <div key={s.id}>
+          <div style={{ padding: "24px 40px 4px", display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ width: 22, height: 3, background: accent, borderRadius: 2 }} />
+            <h2 style={{ margin: 0, fontSize: 14, letterSpacing: "0.08em", textTransform: "uppercase", color: BRAND.navy, fontWeight: 700, whiteSpace: "nowrap" }}>{s.title}</h2>
+            <span style={{ flex: 1, height: 1, background: BRAND.line }} />
+          </div>
+          <div style={{ padding: "4px 40px 12px" }}>
+            {s.items.map((it, i) => (
+              <div key={it.id} style={{ display: "flex", gap: 16, padding: "18px 0", borderTop: i === 0 ? "none" : `1px solid ${BRAND.line}` }}>
+                <div style={{ flexShrink: 0, width: 104 }}>
+                  {it.logo ? <img src={it.logo} alt={it.org} style={{ maxWidth: 88, maxHeight: 34, objectFit: "contain", display: "block", marginBottom: 6 }} /> : null}
+                  <div style={{ fontSize: 11, fontWeight: 700, color: accent }}>{it.date}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: BRAND.navy, marginTop: 3, lineHeight: 1.25 }}>{it.org}</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: BRAND.ink }}>{it.body}</p>
+                  <a href={it.link} style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 600, color: accent, textDecoration: "none" }}>Read more →</a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ background: BRAND.navy, color: "rgba(255,255,255,0.7)", padding: "22px 40px", fontSize: 11, lineHeight: 1.6 }}>
+        <div style={{ fontWeight: 700, letterSpacing: "0.14em", color: "#fff", marginBottom: 6 }}>BNY · ASSET SERVICING COMMERCIAL STRATEGY</div>
+        Internal distribution only. Compiled from public sources for informational purposes. Not investment advice.
+      </div>
+    </div>
+  );
+}
+
+const ghostBtn = { display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, padding: "7px 12px", borderRadius: 8, cursor: "pointer", background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", fontFamily: FONT_STACK };
+const miniBtn = { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 9px", borderRadius: 7, cursor: "pointer", background: "#fff", color: BRAND.ink, border: `1px solid ${BRAND.line}`, fontFamily: FONT_STACK };
+
+function TabBtn({ active, onClick, icon, label }) {
+  return <button onClick={onClick} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "13px 0", fontSize: 13, cursor: "pointer", fontFamily: FONT_STACK, border: "none", background: "none", fontWeight: active ? 700 : 500, color: active ? BRAND.navy : BRAND.slate, borderBottom: active ? `2px solid ${BRAND.navy}` : "2px solid transparent" }}>{icon} {label}</button>;
+}
+function Group({ label, action, children }) {
+  return <section><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><h3 style={{ margin: 0, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: BRAND.slate, fontWeight: 700 }}>{label}</h3>{action}</div>{children}</section>;
+}
+function Field({ label, value, onChange, area, compact, placeholder }) {
+  return <label style={{ display: "block", marginBottom: compact ? 8 : 12 }}><span style={{ display: "block", fontSize: 11, color: BRAND.slate, marginBottom: 4 }}>{label}</span>{area ? <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={compact ? 3 : 4} placeholder={placeholder} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} /> : <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />}</label>;
+}
+function LogoPreview({ src }) {
+  return <div style={{ width: 52, height: 40, flexShrink: 0, borderRadius: 8, border: `1px dashed ${BRAND.line}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>{src ? <img src={src} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <ImageIcon size={16} color={BRAND.line} />}</div>;
+}
+const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, borderRadius: 8, border: `1px solid ${BRAND.line}`, fontFamily: FONT_STACK, color: BRAND.ink, background: "#fff", outline: "none" };
+
+// ---- Email-safe HTML builder ----------------------------------------------
+function esc(s = "") { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function attr(s = "") { return esc(s).replace(/"/g, "&quot;"); }
+
+function itemRowHtml(it, i, accent, F) {
+  const logo = it.logo ? `<div style="margin-bottom:6px;"><img src="${attr(it.logo)}" alt="${attr(it.org)}" width="88" style="max-width:88px;max-height:34px;display:block;border:0;"></div>` : "";
+  return `
+      <tr><td style="padding:18px 0;${i === 0 ? "" : `border-top:1px solid ${BRAND.line};`}font-family:${F};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td valign="top" width="116" style="width:116px;padding-right:16px;font-family:${F};">
+            ${logo}<div style="font-size:11px;font-weight:700;color:${accent};">${esc(it.date)}</div>
+            <div style="font-size:14px;font-weight:700;color:${BRAND.navy};margin-top:3px;line-height:1.25;">${esc(it.org)}</div>
+          </td>
+          <td valign="top" style="font-family:${F};">
+            <p style="margin:0;font-size:13px;line-height:1.7;color:${BRAND.ink};">${esc(it.body)}</p>
+            <a href="${attr(it.link)}" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:600;color:${accent};text-decoration:none;">Read more &rarr;</a>
+          </td>
+        </tr></table>
+      </td></tr>`;
+}
+function sectionHtml(s, accent, F) {
+  const items = s.items.map((it, i) => itemRowHtml(it, i, accent, F)).join("");
+  return `
+    <tr><td style="padding:24px 40px 2px;font-family:${F};">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td width="22" style="width:22px;"><div style="width:22px;height:3px;background:${accent};border-radius:2px;"></div></td>
+        <td style="padding:0 12px;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${BRAND.navy};white-space:nowrap;">${esc(s.title)}</td>
+        <td style="width:100%;"><div style="height:1px;background:${BRAND.line};"></div></td>
+      </tr></table>
+    </td></tr>
+    <tr><td style="padding:2px 40px 8px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items}</table></td></tr>`;
+}
+function buildEmailHtml(model, { accent, headerStyle }) {
+  const F = FONT_STACK;
+  const headerBg = headerStyle === "gradient" ? `background:${BRAND.navy};background:linear-gradient(135deg,${BRAND.navy} 0%,${BRAND.navy2} 100%);` : headerStyle === "rule" ? "background:#ffffff;" : `background:${BRAND.navy};`;
+  const headerColor = headerStyle === "rule" ? BRAND.navy : "#ffffff";
+  const dateBg = headerStyle === "rule" ? BRAND.goldSoft : "rgba(255,255,255,0.14)";
+  const dateColor = headerStyle === "rule" ? accent : "#ffffff";
+  const headerBorder = headerStyle === "rule" ? `border-bottom:3px solid ${accent};` : "";
+  const sections = model.sections.map((s) => sectionHtml(s, accent, F)).join("");
+  return `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
+<title>${esc(model.masthead.title)}</title></head>
+<body style="margin:0;padding:0;background:${BRAND.wash};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.wash};">
+<tr><td align="center" style="padding:24px 12px;">
+  <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:640px;max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;">
+    <tr><td style="${headerBg}${headerBorder}padding:34px 40px 30px;font-family:${F};">
+      <div style="margin-bottom:18px;"><span style="font-weight:700;letter-spacing:0.16em;font-size:17px;color:${headerColor};">BNY</span><span style="color:${headerColor};opacity:0.6;">&nbsp;|&nbsp;</span><span style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${headerColor};opacity:0.85;">${esc(model.masthead.kicker)}</span></div>
+      <div style="font-size:40px;font-weight:700;letter-spacing:-0.02em;line-height:1.05;color:${headerColor};">${esc(model.masthead.title)}</div>
+      <div style="margin-top:12px;display:inline-block;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;background:${dateBg};color:${dateColor};">${esc(model.masthead.dateRange)}</div>
+    </td></tr>
+    <tr><td style="padding:22px 40px;background:${BRAND.wash};border-left:4px solid ${accent};font-family:${F};">
+      <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:${accent};font-weight:700;margin-bottom:8px;">This week at a glance</div>
+      <p style="margin:0;font-size:13.5px;line-height:1.65;color:${BRAND.ink};">${esc(model.masthead.summary)}</p>
+    </td></tr>
+    ${sections}
+    <tr><td style="background:${BRAND.navy};padding:22px 40px;font-family:${F};">
+      <div style="font-weight:700;letter-spacing:0.14em;color:#ffffff;font-size:11px;margin-bottom:6px;">BNY &middot; ASSET SERVICING COMMERCIAL STRATEGY</div>
+      <div style="font-size:11px;line-height:1.6;color:rgba(255,255,255,0.7);">Internal distribution only. Compiled from public sources for informational purposes. Not investment advice.</div>
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
+}
+
+// ---- MJML builder ---------------------------------------------------------
+function mjText(s = "") { return String(s).replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function buildMjml(model, { accent, headerStyle }) {
+  const navy = BRAND.navy;
+  const headerColor = headerStyle === "rule" ? navy : "#ffffff";
+  const headerAttrs = headerStyle === "rule" ? `background-color="#ffffff" border-bottom="3px solid ${accent}"` : `background-color="${navy}"`;
+  const sections = model.sections.map((s) => {
+    const items = s.items.map((it, i) => {
+      const border = i === 0 ? "" : `border-top="1px solid ${BRAND.line}" padding-top="18px"`;
+      const logo = it.logo ? `\n        <mj-image src="${it.logo}" alt="${mjText(it.org)}" width="88px" align="left" padding="0 0 6px 0" />` : "";
+      return `
+      <mj-group ${border} padding="10px 0">
+        <mj-column width="30%">${logo}
+          <mj-text font-size="11px" font-weight="700" color="${accent}" padding="0">${mjText(it.date)}</mj-text>
+          <mj-text font-size="14px" font-weight="700" color="${navy}" padding="3px 0 0 0" line-height="1.25">${mjText(it.org)}</mj-text>
+        </mj-column>
+        <mj-column width="70%">
+          <mj-text font-size="13px" line-height="1.7" color="${BRAND.ink}" padding="0">${mjText(it.body)}</mj-text>
+          <mj-text font-size="12px" padding="8px 0 0 0"><a href="${it.link}" style="color:${accent};font-weight:600;text-decoration:none;">Read more &rarr;</a></mj-text>
+        </mj-column>
+      </mj-group>`;
+    }).join("");
+    return `
+    <mj-section padding="20px 24px 0">
+      <mj-column>
+        <mj-text font-size="14px" font-weight="700" letter-spacing="1px" text-transform="uppercase" color="${navy}" padding="0 0 6px 0">${mjText(s.title)}</mj-text>
+        <mj-divider border-width="1px" border-color="${BRAND.line}" padding="0 0 6px 0" />
+      </mj-column>
+    </mj-section>
+    <mj-section padding="0 24px">
+      <mj-column>${items}
+      </mj-column>
+    </mj-section>`;
+  }).join("");
+
+  return `<mjml>
+  <mj-head>
+    <mj-title>${mjText(model.masthead.title)}</mj-title>
+    <mj-attributes>
+      <mj-all font-family="Avenir Next, Avenir, Segoe UI, Helvetica, Arial, sans-serif" />
+      <mj-text color="${BRAND.ink}" />
+    </mj-attributes>
+    <mj-style>a { text-decoration:none; }</mj-style>
+  </mj-head>
+  <mj-body background-color="${BRAND.wash}">
+
+    <mj-section ${headerAttrs} padding="34px 24px 30px">
+      <mj-column>
+        <mj-text font-size="11px" letter-spacing="1.5px" text-transform="uppercase" color="${headerColor}" padding="0 0 14px 0">BNY&nbsp;&nbsp;|&nbsp;&nbsp;${mjText(model.masthead.kicker)}</mj-text>
+        <mj-text font-size="40px" font-weight="700" line-height="1.05" color="${headerColor}" padding="0">${mjText(model.masthead.title)}</mj-text>
+        <mj-text font-size="12px" font-weight="600" color="${headerColor}" padding="14px 0 0 0">${mjText(model.masthead.dateRange)}</mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="${BRAND.wash}" padding="22px 24px" border-left="4px solid ${accent}">
+      <mj-column>
+        <mj-text font-size="10px" letter-spacing="1.4px" text-transform="uppercase" font-weight="700" color="${accent}" padding="0 0 8px 0">This week at a glance</mj-text>
+        <mj-text font-size="13.5px" line-height="1.65" color="${BRAND.ink}" padding="0">${mjText(model.masthead.summary)}</mj-text>
+      </mj-column>
+    </mj-section>
+${sections}
+
+    <mj-section background-color="${navy}" padding="22px 24px">
+      <mj-column>
+        <mj-text font-size="11px" font-weight="700" letter-spacing="1.4px" color="#ffffff" padding="0 0 6px 0">BNY &middot; ASSET SERVICING COMMERCIAL STRATEGY</mj-text>
+        <mj-text font-size="11px" line-height="1.6" color="rgba(255,255,255,0.7)" padding="0">Internal distribution only. Compiled from public sources for informational purposes. Not investment advice.</mj-text>
+      </mj-column>
+    </mj-section>
+
+  </mj-body>
+</mjml>`;
+}
