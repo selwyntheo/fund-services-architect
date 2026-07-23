@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F&amp;IS Agentic Operations Architecture — Digital Workforce with Governed Autonomy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;450;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Palette lifted from the existing F&IS slide */
+  --canvas:#F4F2EE;          /* slide background */
+  --panel:#FFFFFF;           /* white cards */
+  --sand:#EAE3D8;            /* tan context-layer panel */
+  --sky:#CBE7F1;             /* light blue fills */
+  --sky-pale:#E7F3F8;        /* paler blue */
+  --teal:#1F5F79;            /* dark teal boxes (agents) */
+  --teal-deep:#174A5F;       /* darker teal */
+  --ink:#16394A;             /* heading slate */
+  --ink-soft:#3F5A68;        /* secondary text */
+  --line:#C8D6DD;            /* hairlines */
+  --amber:#C08A2D;           /* human-gate accent (approvals / handoffs) */
+  --amber-pale:#F6EBD4;
+  --green:#3C7A5A;           /* autonomous-ok */
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:#DDD9D2}
+body{
+  font-family:'IBM Plex Sans',system-ui,sans-serif;
+  color:var(--ink);
+  background:var(--canvas);
+  max-width:1560px;margin:0 auto;
+  padding:34px 40px 46px;
+  font-size:12.5px;line-height:1.42;
+}
+h1,h2,h3,.eyebrow{font-family:'Archivo',system-ui,sans-serif}
+
+/* ---------- masthead ---------- */
+header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:20px}
+.eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--teal)}
+h1{font-size:27px;font-weight:800;letter-spacing:-.015em;margin-top:4px}
+h1 span{color:var(--teal)}
+.masthead-note{max-width:420px;text-align:right;color:var(--ink-soft);font-size:11.5px}
+.masthead-note b{color:var(--ink)}
+
+/* ---------- legend ---------- */
+.legend{display:flex;gap:22px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.legend .item{display:flex;gap:7px;align-items:center;font-size:11px;color:var(--ink-soft)}
+.chip{width:14px;height:14px;border-radius:3px;flex:none}
+.chip.agent{background:var(--teal)}
+.chip.hgate{background:var(--amber)}
+.chip.auto{background:var(--green)}
+.chip.svc{background:var(--sky);border:1px solid var(--line)}
+.chip.data{background:var(--sand);border:1px solid #D8CDBC}
+.legend .tiers{margin-left:auto;display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:10px}
+.tier{padding:2px 7px;border-radius:10px;border:1px solid var(--line);background:#fff}
+.tier.t0{color:var(--green);border-color:var(--green)}
+.tier.t1{color:var(--teal)}
+.tier.t2{color:var(--amber);border-color:var(--amber)}
+.tier.t3{color:#fff;background:var(--amber);border-color:var(--amber)}
+
+/* ---------- generic band ---------- */
+.band{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:14px;position:relative}
+.band-title{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.band-title h2{font-size:14.5px;font-weight:700;letter-spacing:.01em}
+.band-title .sub{font-size:11px;color:var(--ink-soft)}
+.band-tag{position:absolute;top:-9px;left:16px;background:var(--ink);color:#fff;font-family:var(--mono);font-size:9.5px;padding:2px 9px;border-radius:9px;letter-spacing:.06em}
+
+/* ---------- Plane 1 : human experience ---------- */
+.ui-grid{display:grid;grid-template-columns:1.25fr 1.25fr 1fr 1fr;gap:10px}
+.ui-card{background:var(--sky-pale);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.ui-card h3{font-size:12px;font-weight:700;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.ui-card ul{list-style:none}
+.ui-card li{padding-left:12px;position:relative;color:var(--ink-soft);font-size:11px;margin-bottom:2.5px}
+.ui-card li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--teal)}
+.ui-card.human{background:var(--amber-pale);border-color:#E0C68C}
+.ui-card.human li::before{background:var(--amber)}
+.badge{font-family:var(--mono);font-size:9px;background:var(--ink);color:#fff;border-radius:8px;padding:1px 7px;font-weight:400}
+.badge.amber{background:var(--amber)}
+
+/* ---------- Plane 2 : digital workforce ---------- */
+.streams{display:grid;grid-template-columns:repeat(6,1fr);gap:0;margin-bottom:12px}
+.chev{position:relative;background:var(--teal);color:#fff;font-family:'Archivo';font-weight:600;font-size:11.5px;
+  padding:7px 10px 7px 20px;clip-path:polygon(0 0,calc(100% - 13px) 0,100% 50%,calc(100% - 13px) 100%,0 100%,13px 50%);
+  text-align:center;letter-spacing:.02em}
+.chev:first-child{clip-path:polygon(0 0,calc(100% - 13px) 0,100% 50%,calc(100% - 13px) 100%,0 100%);padding-left:12px}
+.chev:nth-child(even){background:var(--teal-deep)}
+.emp-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.emp{border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff;display:flex;flex-direction:column;gap:6px}
+.emp .role{background:var(--teal);color:#fff;border-radius:4px;font-size:11px;font-weight:600;padding:5px 8px;text-align:center;font-family:'Archivo'}
+.emp .tasks{font-size:10.3px;color:var(--ink-soft);min-height:40px}
+.autonomy{display:flex;gap:3px;align-items:center}
+.autonomy i{width:11px;height:11px;border-radius:50%;background:#D7E4EA;flex:none}
+.autonomy i.on{background:var(--teal)}
+.autonomy em{font-style:normal;font-family:var(--mono);font-size:8.6px;color:var(--ink-soft);margin-left:4px}
+.gates{display:flex;flex-wrap:wrap;gap:4px}
+.gate{font-family:var(--mono);font-size:8.6px;border-radius:8px;padding:1px 6px;border:1px solid var(--line);color:var(--ink-soft);background:var(--sky-pale)}
+.gate.h{background:var(--amber-pale);border-color:#E0C68C;color:#8A6318;font-weight:500}
+.density-note{font-size:10.5px;color:var(--ink-soft);margin-top:9px;text-align:right}
+.density-note b{color:var(--ink)}
+
+/* ---------- handoff strip ---------- */
+.handoff{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:center;background:linear-gradient(90deg,var(--amber-pale),#FBF6EA);border:1px solid #E0C68C;border-radius:8px;padding:11px 16px;margin-bottom:14px}
+.handoff h2{font-size:12.5px;color:#7A5713}
+.handoff h2 small{display:block;font-family:var(--mono);font-size:9px;font-weight:400;color:#A07E33;margin-top:2px}
+.hand-steps{display:flex;align-items:center;gap:0;overflow:hidden}
+.hstep{background:#fff;border:1px solid #E0C68C;border-radius:5px;padding:6px 10px;font-size:10.3px;text-align:center;flex:1;position:relative}
+.hstep b{display:block;font-family:'Archivo';font-size:10.8px;color:#7A5713}
+.hstep span{color:var(--ink-soft);font-size:9.6px}
+.harrow{flex:none;width:26px;text-align:center;color:var(--amber);font-weight:700}
+
+/* ---------- middle 3-column zone ---------- */
+.midzone{display:grid;grid-template-columns:215px 1fr 235px;gap:14px;margin-bottom:14px;align-items:stretch}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px 14px;position:relative}
+.col h2{font-size:13px;font-weight:700;margin-bottom:9px}
+.svc-list{display:flex;flex-direction:column;gap:6px}
+.svc{background:var(--sky-pale);border:1px solid var(--line);border-radius:5px;padding:6px 9px;font-size:11px}
+.svc b{font-weight:600}
+.svc small{display:block;color:var(--ink-soft);font-size:9.8px;margin-top:1px}
+.svc.hot{background:var(--sky)}
+/* trust plane */
+.trust{border:2px solid var(--ink);background:#fff}
+.trust .band-tag{background:var(--ink)}
+.trust-flow{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.tf{border:1px solid var(--line);border-radius:5px;padding:6px 9px;font-size:10.6px;background:var(--sky-pale)}
+.tf b{font-weight:600;display:block;font-size:11px}
+.tf small{color:var(--ink-soft);font-size:9.6px}
+.tf.gate{background:var(--amber-pale);border-color:#E0C68C}
+.tf-arrow{text-align:center;color:var(--teal);font-weight:700;line-height:1.1;font-size:12px;padding:1px 0}
+.deny{margin-top:8px;font-family:var(--mono);font-size:9px;color:#8A6318;background:var(--amber-pale);border:1px dashed #E0C68C;border-radius:5px;padding:5px 8px}
+/* orchestration center */
+.orch h2 small{font-family:var(--mono);font-size:9.5px;color:var(--ink-soft);font-weight:400;margin-left:6px}
+.orch-inner{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+.orch-cell{background:var(--sky);border:1px solid var(--line);border-radius:5px;padding:7px 9px;font-size:10.6px}
+.orch-cell b{display:block;font-family:'Archivo';font-size:11.3px;margin-bottom:2px}
+.orch-cell span{color:var(--ink-soft);font-size:9.8px}
+.mcp-row{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+.mcp{background:var(--teal);color:#fff;border-radius:4px;padding:6px 8px;text-align:center}
+.mcp code{font-family:var(--mono);font-size:9.6px;display:block}
+.mcp span{font-size:9px;opacity:.85}
+.mcp-note{font-size:10px;color:var(--ink-soft);margin-top:7px}
+.mcp-note b{color:var(--ink)}
+.shield{display:inline-block;width:11px;height:12px;background:var(--amber);clip-path:polygon(50% 0,100% 18%,100% 60%,50% 100%,0 60%,0 18%);vertical-align:-2px;margin-right:3px}
+
+/* ---------- context + flywheel row ---------- */
+.bottomzone{display:grid;grid-template-columns:1fr 380px;gap:14px;margin-bottom:14px}
+.context{background:var(--sand);border:1px solid #D8CDBC;border-radius:8px;padding:13px 16px}
+.context h2{font-size:13px;margin-bottom:9px}
+.ctx-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:10px}
+.ctx{background:#fff;border:1px solid #D8CDBC;border-radius:5px;padding:7px 10px;font-size:10.8px}
+.ctx b{display:block;font-family:'Archivo';font-size:11.5px;margin-bottom:2px}
+.ctx span{color:var(--ink-soft);font-size:9.9px}
+.ctx.gt{border:2px solid var(--teal);background:var(--sky-pale)}
+.stores{display:flex;gap:14px;align-items:center}
+.cyl{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink-soft)}
+.cyl svg{flex:none}
+/* flywheel */
+.flywheel{background:var(--panel);border:2px solid var(--teal);border-radius:8px;padding:13px 14px;position:relative}
+.flywheel h2{font-size:13px;margin-bottom:2px}
+.flywheel .sub{font-size:10.3px;color:var(--ink-soft);margin-bottom:6px}
+.fly-svg{display:block;margin:0 auto}
+
+/* ---------- app landscape ---------- */
+.apps{display:grid;grid-template-columns:repeat(7,1fr);gap:9px}
+.app{background:var(--sky-pale);border:1px solid var(--line);border-radius:5px;padding:9px 8px;text-align:center;font-size:11px;font-weight:500}
+.app small{display:block;font-weight:400;color:var(--ink-soft);font-size:9.4px;margin-top:2px}
+
+/* ---------- footer ---------- */
+footer{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:12px;border-top:1px solid var(--line);color:var(--ink-soft);font-size:10.5px}
+footer .bny{font-family:'Archivo';font-weight:800;font-size:15px;color:var(--ink);letter-spacing:.02em}
+footer .bny::before{content:"➤ ";color:var(--teal)}
+
+@media (max-width:1100px){
+  .ui-grid,.emp-grid,.streams{grid-template-columns:repeat(2,1fr)}
+  .streams .chev{clip-path:none;padding-left:12px}
+  .midzone,.bottomzone{grid-template-columns:1fr}
+  .apps{grid-template-columns:repeat(3,1fr)}
+  .hand-steps{flex-wrap:wrap}.harrow{display:none}.hstep{flex:1 1 45%}
+}
+@media print{body{max-width:none;padding:12mm}html{background:#fff}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">F&amp;IS Technology · AI-Native Operating Model · v2</div>
+    <h1>Agentic Operations Architecture <span>— Digital Workforce with Governed Autonomy</span></h1>
+  </div>
+  <div class="masthead-note">Every agent action crosses <b>one entitlement checkpoint</b> (<span class="shield"></span>= policy decision point); every human touch feeds the <b>ground-truth flywheel</b>. Autonomy is calibrated per task risk tier, not assumed.</div>
+</header>
+
+<div class="legend">
+  <div class="item"><span class="chip agent"></span>Digital employee / agent</div>
+  <div class="item"><span class="chip hgate"></span>Human gate / handoff</div>
+  <div class="item"><span class="chip auto"></span>Autonomous within tier</div>
+  <div class="item"><span class="chip svc"></span>Shared service</div>
+  <div class="item"><span class="chip data"></span>Context &amp; data</div>
+  <div class="tiers">
+    Risk tiers:
+    <span class="tier t0">T0 read</span>
+    <span class="tier t1">T1 draft</span>
+    <span class="tier t2">T2 execute·review</span>
+    <span class="tier t3">T3 approval-token</span>
+  </div>
+</div>
+
+<!-- ══════════ PLANE 1 · HUMAN EXPERIENCE & SUPERVISION ══════════ -->
+<section class="band">
+  <span class="band-tag">PLANE 1 · EXPERIENCE &amp; SUPERVISION</span>
+  <div class="band-title"><h2>Human Experience &amp; Supervision Plane</h2><span class="sub">— one workbench for working <i>with</i> agents; one console for governing them</span></div>
+  <div class="ui-grid">
+    <div class="ui-card">
+      <h3>Ops Workbench <span class="badge">analysts</span></h3>
+      <ul>
+        <li>Task queue blended: human tasks + agent drafts awaiting review</li>
+        <li>Side-by-side evidence panel: agent reasoning, sources, ACCEL-DSL rule hits</li>
+        <li>Accept / edit / reject — every edit is captured as a labeled correction</li>
+      </ul>
+    </div>
+    <div class="ui-card human">
+      <h3>Approval Queue <span class="badge amber">T2/T3 gates</span></h3>
+      <ul>
+        <li>Confidence, materiality &amp; blast-radius shown per item; SLA timers</li>
+        <li>Four-eyes routing for T3 (NAV release, filings, cash movement)</li>
+        <li>Approval mints a signed, time-boxed <b>approval token</b> the agent must present</li>
+      </ul>
+    </div>
+    <div class="ui-card human">
+      <h3>Supervisor Console <span class="badge amber">HOTL</span></h3>
+      <ul>
+        <li>Live autonomy dashboards: acceptance rate, escalations, drift alerts</li>
+        <li>Per-agent pause / throttle / kill switch; tier demotion on anomaly</li>
+        <li>Replay any run from the immutable audit trail</li>
+      </ul>
+    </div>
+    <div class="ui-card">
+      <h3>Client &amp; Oversight Views <span class="badge">read-only</span></h3>
+      <ul>
+        <li>Explainability pack per NAV / filing: who (human+agent), what, why</li>
+        <li>Regulator-ready evidence export from audit envelope</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ PLANE 2 · DIGITAL WORKFORCE ══════════ -->
+<section class="band">
+  <span class="band-tag">PLANE 2 · DIGITAL WORKFORCE</span>
+  <div class="band-title"><h2>Digital Workforce across F&amp;IS Value Streams</h2><span class="sub">— density = share of steps executed by digital employees · gates show where humans enter by design</span></div>
+
+  <div class="streams">
+    <div class="chev">Solution &amp; Leadership</div><div class="chev">Onboarding</div><div class="chev">NAV Calculations</div><div class="chev">Administration</div><div class="chev">Transfer Agency</div><div class="chev">Support</div>
+  </div>
+
+  <div class="emp-grid">
+    <div class="emp">
+      <div class="role">CI &amp; Deal Insights Agent</div>
+      <div class="tasks">RFP intelligence, competitive RAG, deal-book assembly</div>
+      <div class="autonomy"><i class="on"></i><i class="on"></i><i></i><i></i><em>2/4</em></div>
+      <div class="gates"><span class="gate">T0·T1</span><span class="gate h">human: client-facing content</span></div>
+    </div>
+    <div class="emp">
+      <div class="role">Activation Coordinator</div>
+      <div class="tasks">Fund setup, doc extraction (IMAs/SSIs), SLA scaffolding</div>
+      <div class="autonomy"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><em>3/4</em></div>
+      <div class="gates"><span class="gate">T1·T2</span><span class="gate h">human: setup sign-off</span></div>
+    </div>
+    <div class="emp">
+      <div class="role">NAV Oversight Analyst</div>
+      <div class="tasks">NAV calc &amp; recon breaks, pricing exceptions, error correction (materiality-aware)</div>
+      <div class="autonomy"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><em>4/4</em></div>
+      <div class="gates"><span class="gate">T0–T2 auto</span><span class="gate h">T3: NAV release token</span></div>
+    </div>
+    <div class="emp">
+      <div class="role">Regulatory Filing Clerk</div>
+      <div class="tasks">Financial &amp; regulatory reporting, expense analysis, filing prep</div>
+      <div class="autonomy"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><em>3/4</em></div>
+      <div class="gates"><span class="gate">T1·T2</span><span class="gate h">T3: filing submission</span></div>
+    </div>
+    <div class="emp">
+      <div class="role">Investor Services Agent</div>
+      <div class="tasks">Subscriptions / redemptions, book-keeping, KYC follow-ups</div>
+      <div class="autonomy"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><em>3/4</em></div>
+      <div class="gates"><span class="gate">T1·T2</span><span class="gate h">T3: cash movement</span></div>
+    </div>
+    <div class="emp">
+      <div class="role">Client Change Manager</div>
+      <div class="tasks">SLA monitoring, incident triage, ORE, change comms</div>
+      <div class="autonomy"><i class="on"></i><i class="on"></i><i></i><i></i><em>2/4</em></div>
+      <div class="gates"><span class="gate">T0·T1</span><span class="gate h">human: client comms</span></div>
+    </div>
+  </div>
+  <div class="density-note">Agents act under <b>delegated authority of an accountable human sponsor</b> — never as themselves. Tier ceilings are per-task, reviewed quarterly against flywheel metrics.</div>
+</section>
+
+<!-- ══════════ HANDOFF PROTOCOL ══════════ -->
+<section class="handoff">
+  <h2>Agent ⇄ Human Handoff Protocol<small>state machine · symmetric both directions</small></h2>
+  <div class="hand-steps">
+    <div class="hstep"><b>1 · Trigger</b><span>confidence &lt; threshold, tier ceiling, rule conflict, or human pulls task</span></div>
+    <div class="harrow">→</div>
+    <div class="hstep"><b>2 · Package</b><span>context bundle: state, evidence, options considered, recommendation</span></div>
+    <div class="harrow">→</div>
+    <div class="hstep"><b>3 · Route</b><span>skills-based routing to entitled reviewer; SLA clock starts</span></div>
+    <div class="harrow">→</div>
+    <div class="hstep"><b>4 · Decide</b><span>approve / edit / reject / escalate — decision + rationale captured</span></div>
+    <div class="harrow">→</div>
+    <div class="hstep"><b>5 · Return</b><span>agent resumes with decision context, or human retains task</span></div>
+    <div class="harrow">→</div>
+    <div class="hstep"><b>6 · Learn</b><span>outcome labeled into ground-truth store; thresholds recalibrated</span></div>
+  </div>
+</section>
+
+<!-- ══════════ MIDDLE: TRUST · ORCHESTRATION · SHARED SERVICES ══════════ -->
+<div class="midzone">
+
+  <!-- Trust & Entitlement plane -->
+  <aside class="col trust">
+    <span class="band-tag">TRUST &amp; ENTITLEMENT PLANE</span>
+    <h2 style="margin-top:6px">Every call, one checkpoint</h2>
+    <div class="trust-flow">
+      <div class="tf"><b>Agent identity</b><small>each agent = first-class NHI with owner, scope doc, lifecycle &amp; certification</small></div>
+      <div class="tf-arrow">↓</div>
+      <div class="tf"><b>Delegation chain</b><small>human sponsor → agent → tool; carried in every request (on-behalf-of)</small></div>
+      <div class="tf-arrow">↓</div>
+      <div class="tf gate"><b><span class="shield"></span>Entitlement PDP</b><small>policy decision point: intersect user entitlements ∩ agent scope ∩ task tier; JIT, short-lived credentials</small></div>
+      <div class="tf-arrow">↓</div>
+      <div class="tf gate"><b>T3 approval token</b><small>signed, single-use, time-boxed; minted only by Approval Queue</small></div>
+      <div class="tf-arrow">↓</div>
+      <div class="tf"><b>Immutable audit envelope</b><small>who / on-whose-behalf / what / evidence — hash-chained, replayable</small></div>
+    </div>
+    <div class="deny">deny-by-default · no prompt-level authz · enforcement at MCP façade (PEP), never in the model</div>
+  </aside>
+
+  <!-- Orchestration -->
+  <section class="col orch">
+    <span class="band-tag">PLANE 3 · ORCHESTRATION &amp; CAPABILITY</span>
+    <h2 style="margin-top:6px">ACE Orchestration<small>plans · state · retries · escalation routing</small></h2>
+    <div class="orch-inner">
+      <div class="orch-cell"><b>Skills as SOPs</b><span>versioned procedures (nav-error-correction, recon-break-resolution, month-end-close…) pinned to eval scores</span></div>
+      <div class="orch-cell"><b>Agent runtime</b><span>bounded plans; every tool call typed &amp; tier-tagged; checkpointed state for handoff/resume</span></div>
+      <div class="orch-cell"><b>Guardrails</b><span>input/output validation, ACCEL-DSL business rules, tool allow-lists per skill</span></div>
+    </div>
+    <div class="mcp-row">
+      <div class="mcp"><code>mcp_fund_acct</code><span>NAV · GL · ledgers</span></div>
+      <div class="mcp"><code>mcp_pricing</code><span>vendors · fair value</span></div>
+      <div class="mcp"><code>mcp_recon</code><span>4-level breaks</span></div>
+      <div class="mcp"><code>mcp_fund_admin</code><span>expenses · distributions</span></div>
+      <div class="mcp"><code>mcp_regulatory</code><span>filings · reporting</span></div>
+    </div>
+    <div class="mcp-note"><span class="shield"></span><b>Domain-scoped MCP façades are the policy enforcement points</b> — agents never touch applications directly; the façade validates the delegation chain, tier, and (for T3) the approval token before any write.</div>
+  </section>
+
+  <!-- Shared services -->
+  <aside class="col">
+    <span class="band-tag">AI HUB SHARED SERVICES</span>
+    <h2 style="margin-top:6px">Platform services</h2>
+    <div class="svc-list">
+      <div class="svc"><b>AI Gateway</b><small>model routing, quotas, cost telemetry</small></div>
+      <div class="svc"><b>Automated guardrails</b><small>safety, PII, prompt-injection defense</small></div>
+      <div class="svc hot"><b>Skills library</b><small>registry of SOPs; ownership + change control</small></div>
+      <div class="svc hot"><b>Eval store</b><small>golden datasets, regression suites, LLM-judge + rule checks</small></div>
+      <div class="svc"><b>Feedback service</b><small>captures every accept/edit/reject with rationale</small></div>
+      <div class="svc"><b>Cost &amp; SLO telemetry</b><small>per-agent unit economics</small></div>
+    </div>
+  </aside>
+</div>
+
+<!-- ══════════ CONTEXT + FLYWHEEL ══════════ -->
+<div class="bottomzone">
+  <section class="context">
+    <span class="band-tag" style="background:#7A6A4F">PLANE 4 · CONTEXT &amp; KNOWLEDGE</span>
+    <h2 style="margin-top:6px">Context Layer</h2>
+    <div class="ctx-grid">
+      <div class="ctx"><b>Structured</b><span>positions, trades, NAV history, expense ledgers</span></div>
+      <div class="ctx"><b>Unstructured</b><span>docs, IMAs, SSIs, prospectuses, emails</span></div>
+      <div class="ctx"><b>Semantic views</b><span>fund/instrument ontology; entitlement-filtered retrieval</span></div>
+      <div class="ctx gt"><b>Ground-truth store</b><span>curated golden Q&amp;A + resolved cases, human-verified; feeds evals &amp; skills</span></div>
+    </div>
+    <div class="stores">
+      <div class="cyl"><svg width="30" height="24"><ellipse cx="15" cy="5" rx="13" ry="4" fill="#1F5F79"/><path d="M2 5v13c0 2.2 5.8 4 13 4s13-1.8 13-4V5" fill="#2E7D9C"/></svg>Snowflake</div>
+      <div class="cyl"><svg width="30" height="24"><ellipse cx="15" cy="5" rx="13" ry="4" fill="#1F5F79"/><path d="M2 5v13c0 2.2 5.8 4 13 4s13-1.8 13-4V5" fill="#2E7D9C"/></svg>Knowledge graph</div>
+      <div class="cyl"><svg width="30" height="24"><ellipse cx="15" cy="5" rx="13" ry="4" fill="#1F5F79"/><path d="M2 5v13c0 2.2 5.8 4 13 4s13-1.8 13-4V5" fill="#2E7D9C"/></svg>Vector store</div>
+      <div class="cyl" style="margin-left:auto;color:#6B5B3E">Retrieval is entitlement-aware: the same PDP filters what each agent may read, per delegating user.</div>
+    </div>
+  </section>
+
+  <!-- Flywheel -->
+  <section class="flywheel">
+    <span class="band-tag" style="background:var(--teal)">GROUND-TRUTH FLYWHEEL</span>
+    <h2 style="margin-top:6px">Continuous improvement loop</h2>
+    <div class="sub">every human touch is training signal — corrections compound into autonomy</div>
+    <svg class="fly-svg" width="340" height="215" viewBox="0 0 340 215" role="img" aria-label="Ground truth flywheel">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="#1F5F79"/>
+        </marker>
+      </defs>
+      <circle cx="170" cy="108" r="72" fill="none" stroke="#CBE7F1" stroke-width="26"/>
+      <path d="M170 36 A72 72 0 0 1 238 84" fill="none" stroke="#1F5F79" stroke-width="3" marker-end="url(#arr)"/>
+      <path d="M242 108 A72 72 0 0 1 208 170" fill="none" stroke="#1F5F79" stroke-width="3" marker-end="url(#arr)"/>
+      <path d="M170 180 A72 72 0 0 1 102 132" fill="none" stroke="#1F5F79" stroke-width="3" marker-end="url(#arr)"/>
+      <path d="M98 108 A72 72 0 0 1 132 46" fill="none" stroke="#C08A2D" stroke-width="3" marker-end="url(#arr)"/>
+      <g font-family="'IBM Plex Sans',sans-serif" font-size="10" fill="#16394A" text-anchor="middle">
+        <g><rect x="118" y="8" width="104" height="26" rx="5" fill="#1F5F79"/><text x="170" y="20" fill="#fff" font-weight="600">1 · Production traces</text><text x="170" y="30" fill="#CBE7F1" font-size="8">every run, tool call, outcome</text></g>
+        <g><rect x="250" y="92" width="86" height="32" rx="5" fill="#F6EBD4" stroke="#E0C68C"/><text x="293" y="105" fill="#7A5713" font-weight="600">2 · Human review</text><text x="293" y="116" fill="#8A6318" font-size="8">accept · edit · reject + why</text></g>
+        <g><rect x="118" y="182" width="104" height="30" rx="5" fill="#fff" stroke="#1F5F79" stroke-width="1.6"/><text x="170" y="195" font-weight="600">3 · Curate ground truth</text><text x="170" y="206" fill="#3F5A68" font-size="8">golden cases · rule updates</text></g>
+        <g><rect x="2" y="92" width="88" height="32" rx="5" fill="#CBE7F1"/><text x="46" y="105" font-weight="600">4 · Eval &amp; promote</text><text x="46" y="116" fill="#3F5A68" font-size="8">gate skill versions; raise tier</text></g>
+        <text x="170" y="104" font-family="Archivo" font-weight="700" font-size="11" fill="#1F5F79">TRUST EARNS</text>
+        <text x="170" y="117" font-family="Archivo" font-weight="700" font-size="11" fill="#1F5F79">AUTONOMY</text>
+      </g>
+    </svg>
+  </section>
+</div>
+
+<!-- ══════════ APP LANDSCAPE ══════════ -->
+<section class="band" style="margin-bottom:8px">
+  <span class="band-tag">PLANE 5 · F&amp;IS APPLICATION LANDSCAPE</span>
+  <div class="band-title" style="margin-top:4px"><h2>System of record — reached only through MCP façades</h2></div>
+  <div class="apps">
+    <div class="app">Inst Capture</div>
+    <div class="app">Oversight</div>
+    <div class="app">Accounting Engines<small>NAV · GL</small></div>
+    <div class="app">TA / Record Keeping</div>
+    <div class="app">Recon Platforms</div>
+    <div class="app">Reporting</div>
+    <div class="app">Entitlement / IAM<small>source of authority</small></div>
+  </div>
+</section>
+
+<footer>
+  <div>Internal Use Only · F&amp;IS AI Architecture v2 · calibrated autonomy: T0–T2 within tier ceilings, T3 always human-approved</div>
+  <div class="bny">BNY</div>
+</footer>
+
+</body>
+</html>
