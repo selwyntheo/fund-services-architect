@@ -1,0 +1,401 @@
+---
+name: netx-wove-worksheet-trading
+description: End-to-end workflow for integrating worksheet trading across the NetX and Wove front ends, with the NetX backend as the single trading engine. Use this skill whenever the user mentions worksheet trading, trade worksheets, rebalancing worksheets, block/allocation trading, exposing NetX trading services to Wove, a shared backend or BFF for NetX and Wove, order staging/submission parity between the two UIs, or any task touching the trading flow across NetX and Wove — even if they only ask for one piece (an API, a UI screen, a test plan, a migration step).
+---
+
+# NetX ⇄ Wove Worksheet Trading Integration
+
+## Goal
+One trading engine (NetX backend), two front ends (NetX UI, Wove UI), identical behaviour.
+A worksheet created, edited or submitted from either UI must produce the same orders,
+the same validations, the same audit trail, and be visible in the other UI.
+
+## Architectural principles (why they matter)
+1. **NetX backend is the system of record.** Worksheet state, order generation, pre-trade
+   checks and routing live only in the backend. If Wove re-implements any of this, the two
+   UIs will drift and you will get different orders for the same inputs — a compliance problem,
+   not just a bug.
+2. **Front ends are thin.** They render, collect input, and call the API. No trade math,
+   no eligibility rules, no rounding in the UI beyond display formatting.
+3. **One contract, versioned.** A single OpenAPI contract (`references/api-contract.md`)
+   drives the backend, both UI clients (generated), and contract tests.
+4. **Integration via a Worksheet API facade / BFF**, not by letting Wove call NetX internals.
+   The facade translates Wove's auth/session model to NetX entitlements and hides legacy shapes.
+5. **Trading safety is non-negotiable:** idempotent submission, optimistic locking on worksheets,
+   explicit state machine, full audit, entitlement check on every call. See
+   `references/domain-model.md` → "Safety invariants".
+
+## Target topology
+```
+ NetX UI ──┐                                   ┌── Order Mgmt / Routing (existing NetX)
+           ├─► Worksheet API facade (BFF) ─► NetX Worksheet Service ──┼── Pre-trade compliance
+ Wove UI ──┘     auth, entitlements,          (state machine,         ├── Pricing / positions
+                 versioning, idempotency      order generation)       └── Audit / event stream
+                                    ▲
+                                    └── Events (worksheet.*, order.*) → both UIs (WebSocket/SSE)
+```
+
+## Workflow — run phases in order, each ends with a gate
+
+| Phase | Output | Gate (don't proceed until true) |
+|---|---|---|
+| 0. Discovery | `docs/discovery.md` filled from template below | Every "UNKNOWN" resolved or explicitly deferred |
+| 1. Domain & contract | OpenAPI spec + event schemas + state machine | Reviewed by NetX backend owner and Wove FE lead |
+| 2. Backend facade | Worksheet API endpoints on NetX backend | Contract tests green; existing NetX UI unaffected |
+| 3. NetX UI adoption | NetX UI moved onto the facade (behind flag) | Parity: old path vs new path produce identical orders |
+| 4. Wove UI integration | Wove worksheet screens on generated client | Same scenario suite passes from Wove |
+| 5. Cross-UI sync | Events + concurrency handling | Edit-in-NetX / view-in-Wove scenarios pass |
+| 6. Hardening | Perf, security, audit, failure modes | Non-functional checklist in `references/testing.md` |
+| 7. Rollout | Flags, pilot firms, runbook, rollback | Sign-off from trading ops + compliance |
+
+For each phase, use the matching prompt in `references/prompts.md`. Read that file when
+you start a phase; paste the prompt into Claude Code (or run it here) with the repo open.
+
+### Phase 0 — Discovery template
+Create `docs/discovery.md` answering these. Mark anything not yet known as `UNKNOWN` — never guess.
+
+- **Backend:** language/framework (e.g. Java/Spring Boot), where worksheet logic lives today,
+  persistence (Oracle? Mongo?), caching (Hazelcast?), messaging (Kafka/MQ), existing endpoints
+  the NetX UI calls for worksheets.
+- **NetX UI:** framework, how it calls the backend (REST/GraphQL/legacy servlet), session model.
+- **Wove UI:** framework, design system, how it authenticates (SSO/OIDC/token exchange),
+  which gateway it can reach, deployment boundary relative to NetX.
+- **Identity & entitlements:** how a Wove user maps to a NetX user/rep code/office; who may
+  trade which accounts; supervisory/approval roles.
+- **Worksheet scope:** worksheet types in scope (single-account, multi-account/rebalance,
+  model-driven, block with allocation), asset classes (equities, ETFs, mutual funds, fixed income),
+  order types, time-in-force, fractional support.
+- **Downstream:** order routing, pre-trade compliance engine, pricing source, positions/cash source.
+- **Constraints:** latency SLOs, max lines per worksheet, market-hours rules, regulatory records
+  retention, data residency, change-management windows.
+
+### Phase-independent rules
+- Every change touching submission must include an idempotency test and an entitlement-denied test.
+- Never change existing NetX endpoint behaviour in place; add the facade alongside and migrate
+  behind a feature flag (`worksheet.facade.enabled`, per firm/office).
+- Money and quantity are decimals (BigDecimal / string in JSON), never floats.
+- Log correlation IDs end to end (`X-Correlation-Id` from UI → facade → service → routing).
+- Keep a running `docs/decisions.md` (ADR-lite): decision, options, reason, date.
+
+## Reference files
+- `references/domain-model.md` — worksheet concepts, state machine, validation layers, safety invariants. Read in Phase 1 and whenever touching state/submission.
+- `references/api-contract.md` — endpoint and event contract skeleton. Read in Phases 1–5.
+- `references/prompts.md` — copy-ready prompts per phase, plus review prompts. Read at the start of every phase.
+- `references/testing.md` — scenario suite, parity harness, non-functional checklist. Read in Phases 2–6.
+
+## Output expectations
+When asked to do a phase, produce: the code/spec changes, updated `docs/decisions.md`,
+a short summary of what changed, open questions, and which gate criteria are now met or not.
+
+
+---
+
+<!-- references/domain-model.md -->
+
+# Reference: Worksheet Trading — Domain Model
+
+Adjust names to match what Phase 0 discovery finds in the NetX codebase. Prefer the existing
+NetX vocabulary over this file's wherever they differ, and record the mapping in `docs/decisions.md`.
+
+## Core entities
+- **Worksheet** — a staged, editable set of proposed trades. Fields: `worksheetId`, `type`
+  (SINGLE_ACCOUNT | MULTI_ACCOUNT | MODEL_REBALANCE | BLOCK), `ownerUserId`, `repCode/office`,
+  `status`, `version` (optimistic lock), `createdVia` (NETX | WOVE), `createdAt/updatedAt`,
+  `lines[]`, `validationSummary`.
+- **WorksheetLine** — one proposed trade: `lineId`, `accountId`, `securityId` (+ symbol/CUSIP),
+  `side` (BUY | SELL | SELL_ALL | EXCHANGE), `quantityType` (SHARES | DOLLARS | PERCENT),
+  `quantity` (decimal string), `orderType` (MARKET | LIMIT | STOP | STOP_LIMIT),
+  `limitPrice`, `stopPrice`, `timeInForce`, `solicitation` (SOLICITED | UNSOLICITED),
+  `lineStatus`, `messages[]` (validation results).
+- **Allocation** (BLOCK only) — how a block order splits across accounts; method
+  (PRO_RATA | FIXED | CUSTOM), rounding rule, residual handling.
+- **Model / Target** (MODEL_REBALANCE) — target weights, drift tolerance, cash reserve,
+  tax-lot / wash-sale preferences. Order *generation* from a model happens in the backend only.
+- **Order** — produced on submit. Links back to `worksheetId` + `lineId`. Its lifecycle is owned by
+  existing NetX order management.
+
+## Worksheet state machine
+```
+DRAFT ──validate──► VALIDATED ──submit──► SUBMITTING ──► SUBMITTED ──► (PARTIALLY_)FILLED / COMPLETED
+  ▲  │                  │                     │
+  │  └──edit────────────┘ (any edit returns    └──► SUBMIT_FAILED (retryable) / REJECTED
+  │                        to DRAFT)
+  └──── PENDING_APPROVAL ◄── submit when supervisory approval required ──► APPROVED → SUBMITTING
+CANCELLED  (from DRAFT, VALIDATED, PENDING_APPROVAL)
+EXPIRED    (DRAFT/VALIDATED past configured TTL or trading-day rollover)
+```
+Rules:
+- Only the backend transitions states. UIs request transitions via commands.
+- Edits are allowed only in DRAFT/VALIDATED; an edit invalidates prior validation.
+- Submit requires status VALIDATED **and** validation fresh (prices/positions not older than N seconds; N from discovery).
+- SUBMITTING is terminal-for-editing; partial submission failures are tracked per line.
+
+## Validation layers (all backend)
+1. **Structural** — required fields, formats, decimal precision.
+2. **Reference** — security tradable, account open/active, restricted lists.
+3. **Holdings & buying power** — position sufficiency for sells, cash/margin for buys, pending orders netted.
+4. **Suitability / compliance** — concentration, product eligibility (e.g. mutual fund share class,
+   breakpoints), solicited/unsolicited rules, pattern-day-trade, wash-sale warnings.
+5. **Market** — market hours, TIF compatibility, price collars, min/max order size.
+Each message: `code`, `severity` (ERROR blocks submit | WARNING needs acknowledgement | INFO),
+`lineId` or worksheet-level, human text, `ackRequired`.
+Both UIs must display the same messages and require the same acknowledgements.
+
+## Safety invariants
+- **Idempotency:** submit takes `Idempotency-Key`; replays return the original result, never new orders.
+- **Optimistic locking:** every mutating call sends `If-Match: <version>`; mismatch → 409 with current state.
+- **Entitlements on every call:** user may view/edit/submit for each account on every line. Checked in the
+  backend service, not only in the facade and never only in the UI.
+- **Audit:** every command recorded with user, channel (NETX|WOVE), before/after, correlation ID, timestamp.
+- **No client-side order math:** UIs never compute quantities from dollars/percent or model drift.
+- **Decimals as strings** in JSON; server is authoritative for rounding.
+- **Kill switch:** per-firm flag to disable submission from Wove without affecting NetX.
+
+
+---
+
+<!-- references/api-contract.md -->
+
+# Reference: Worksheet API Contract (skeleton)
+
+Base path: `/api/trading/v1/worksheets`. Turn this into a real OpenAPI 3.1 file in Phase 1
+(`api/worksheet-api.yaml`) and generate the TypeScript clients for both UIs from it.
+
+## Common headers
+| Header | Direction | Purpose |
+|---|---|---|
+| `Authorization: Bearer <token>` | req | Wove/NetX token; facade exchanges for NetX identity |
+| `X-Channel: NETX \| WOVE` | req | Audit + per-channel kill switch |
+| `X-Correlation-Id` | req/resp | End-to-end tracing |
+| `If-Match: <version>` | req (mutations) | Optimistic lock |
+| `ETag: <version>` | resp | Current worksheet version |
+| `Idempotency-Key` | req (create, submit) | Safe retries |
+
+## Endpoints
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/` | Create worksheet (type, accounts, optional seed lines/model) |
+| GET | `/?status=&owner=&account=&page=` | List worksheets visible to user |
+| GET | `/{id}` | Full worksheet with lines and messages |
+| PATCH | `/{id}` | Worksheet-level edits (name, notes, settings) |
+| POST | `/{id}/lines` | Add lines (batch) |
+| PATCH | `/{id}/lines/{lineId}` | Edit a line |
+| DELETE | `/{id}/lines/{lineId}` | Remove a line |
+| POST | `/{id}/generate` | Backend generates lines from model / cash target (rebalance) |
+| POST | `/{id}/allocations` | Set block allocation (BLOCK) |
+| POST | `/{id}/validate` | Run all validation layers; returns messages + status |
+| POST | `/{id}/acknowledgements` | Acknowledge WARNING messages by code/lineId |
+| POST | `/{id}/submit` | Submit (idempotent); returns per-line order refs or PENDING_APPROVAL |
+| POST | `/{id}/approve` / `/reject` | Supervisory action |
+| POST | `/{id}/cancel` | Cancel worksheet |
+| GET | `/{id}/audit` | Audit trail |
+| GET | `/lookups/securities?q=` | Security search (shared so both UIs match) |
+| GET | `/lookups/accounts?q=` | Accounts the user can trade |
+
+## Error model (RFC 7807 problem+json)
+```json
+{ "type": "https://errors/.../version-conflict", "title": "Worksheet changed",
+  "status": 409, "code": "WS_VERSION_CONFLICT", "correlationId": "…",
+  "detail": "Worksheet was modified by another session.", "currentVersion": 14 }
+```
+Standard codes: `WS_NOT_FOUND` 404, `WS_FORBIDDEN` 403, `WS_VERSION_CONFLICT` 409,
+`WS_INVALID_STATE` 409, `WS_VALIDATION_FAILED` 422, `WS_STALE_VALIDATION` 422,
+`WS_CHANNEL_DISABLED` 503, `WS_DOWNSTREAM_UNAVAILABLE` 503.
+
+## Events (Kafka topic `trading.worksheet.events`, pushed to UIs via SSE/WebSocket)
+Envelope: `{ eventId, type, worksheetId, version, occurredAt, channel, actorUserId, correlationId, payload }`
+Types: `worksheet.created`, `worksheet.updated`, `worksheet.validated`, `worksheet.submitted`,
+`worksheet.approval_required`, `worksheet.cancelled`, `worksheet.expired`,
+`order.status_changed` (per line: accepted, partially_filled, filled, rejected).
+UIs treat events as "refetch hints": on an event with `version` > local version, GET the worksheet.
+Never apply event payloads as the source of truth for editing.
+
+
+---
+
+<!-- references/prompts.md -->
+
+# Reference: Prompts by Phase
+
+Use with Claude Code (repo open) or in chat. Replace `<…>` placeholders. Each prompt asks for a plan
+first so you can correct direction before code is written. Run phases in order.
+
+---
+
+## Phase 0 — Discovery
+```
+Use the netx-wove-worksheet-trading skill. We are in Phase 0 (Discovery).
+Repos available: <netx-backend path>, <netx-ui path>, <wove-ui path>.
+1. Find every place worksheet trading is implemented today: controllers/endpoints, services,
+   entities/tables, validation classes, order-submission calls, Kafka/MQ producers.
+2. Map the NetX UI screens for worksheets to the backend calls they make (method, path, payload).
+3. Identify how Wove authenticates and which gateway/network path it can use to reach NetX.
+4. Fill docs/discovery.md using the skill's template. Mark anything you cannot confirm from code
+   as UNKNOWN with the exact question to ask and whom (backend owner, Wove lead, compliance).
+Do not modify any code in this phase. End with a list of the top 5 risks.
+```
+
+## Phase 1 — Domain model & contract
+```
+Use the netx-wove-worksheet-trading skill, Phase 1. Inputs: docs/discovery.md.
+1. Reconcile references/domain-model.md with the real NetX entities; write the mapping table
+   (skill term → NetX class/table/field) into docs/decisions.md.
+2. Produce api/worksheet-api.yaml (OpenAPI 3.1) from references/api-contract.md, using real
+   field names, enums and validation codes found in NetX. Decimals as strings.
+3. Produce api/events/*.json (JSON Schema) for each event type.
+4. Produce docs/state-machine.md with the actual allowed transitions and which component triggers each.
+5. List every place the existing NetX behaviour cannot be expressed by this contract.
+Show me the plan and the list from step 5 before writing files.
+```
+
+## Phase 2 — Backend facade
+```
+Use the netx-wove-worksheet-trading skill, Phase 2. Backend: <Spring Boot module path>.
+Implement the Worksheet API facade from api/worksheet-api.yaml:
+- Generate interfaces from the OpenAPI spec (openapi-generator, spring, interfaceOnly=true).
+- Controllers delegate to the EXISTING NetX worksheet services; do not duplicate business logic.
+  Where a capability only exists inside legacy UI-facing code, extract it into a service first
+  and keep the legacy path calling the extracted service.
+- Implement: token → NetX identity/entitlement resolution; X-Channel handling; per-channel
+  kill switch; If-Match/ETag optimistic locking; Idempotency-Key store (<Oracle/Mongo/Hazelcast>)
+  with TTL; problem+json errors with the codes in the contract; correlation-ID propagation; audit writes.
+- Publish events to trading.worksheet.events after commit (transactional outbox if Kafka).
+- Tests: contract tests generated from the spec, idempotent-replay test, version-conflict test,
+  entitlement-denied test for every mutating endpoint, state-transition tests for every illegal move.
+Plan first: list files to add/change and any legacy code you must refactor. Existing NetX UI
+endpoints must keep working unchanged.
+```
+
+## Phase 3 — NetX UI onto the facade
+```
+Use the netx-wove-worksheet-trading skill, Phase 3. NetX UI: <path, framework>.
+1. Generate a typed client from api/worksheet-api.yaml into <shared-client package>.
+2. Behind feature flag worksheet.facade.enabled, switch worksheet screens to the new client.
+   Keep the old path intact when the flag is off.
+3. Remove any trade math/validation from the UI; render backend messages and ack requirements.
+4. Handle 409 (reload + show diff), 422 (show messages), 503 channel-disabled (read-only banner).
+5. Build the parity harness from references/testing.md: run each scenario via old path and
+   new path and diff the resulting orders field by field.
+Report any scenario where outputs differ, with root cause, before fixing anything.
+```
+
+## Phase 4 — Wove UI integration
+```
+Use the netx-wove-worksheet-trading skill, Phase 4. Wove UI: <path, framework, design system>.
+Build worksheet trading in Wove using the SAME generated client package as NetX UI.
+Screens: worksheet list, create (by type), line grid editor with security/account lookup,
+model rebalance generate view, block allocation view, validation panel with acknowledgements,
+submit confirmation with order references, approval queue (if role), audit tab.
+Rules: use Wove design-system components; zero client-side trade math; decimals kept as strings
+until display; every mutation sends If-Match and correlation ID; submit sends Idempotency-Key
+generated once per user click and reused on retry; disable submit while SUBMITTING.
+Plan first: screen list, component tree, state management approach, and which API call each
+user action maps to. Then implement screen by screen, with component tests and one Playwright
+e2e per scenario in references/testing.md.
+```
+
+## Phase 5 — Cross-UI sync & concurrency
+```
+Use the netx-wove-worksheet-trading skill, Phase 5.
+1. Add an SSE (or WebSocket, per discovery) endpoint on the facade that streams
+   trading.worksheet.events filtered by the user's entitlements.
+2. In both UIs: subscribe on worksheet open; on event with higher version, refetch; if the user
+   has unsaved edits, show "changed in <channel> by <user>" with reload/compare options.
+3. Presence (optional): show who else has the worksheet open.
+4. Tests for: edit in NetX → Wove updates; concurrent edits → one 409; submit in Wove while NetX
+   open → NetX becomes read-only with order refs; reconnect after network drop replays missed versions.
+```
+
+## Phase 6 — Hardening
+```
+Use the netx-wove-worksheet-trading skill, Phase 6. Run the non-functional checklist in
+references/testing.md. For each item: status (pass/fail/not tested), evidence (test, log, dashboard),
+and fix plan. Include a load test at <N> concurrent users and <M>-line worksheets, a downstream
+outage drill (compliance engine, pricing, routing), and a security review of the facade
+(authz on every route, IDOR checks on worksheetId/lineId/accountId, input limits, log redaction).
+```
+
+## Phase 7 — Rollout
+```
+Use the netx-wove-worksheet-trading skill, Phase 7. Write docs/rollout.md:
+flag strategy (facade on for NetX first, then Wove pilot firms), pilot entry/exit criteria,
+monitoring dashboards and alerts (submit latency, error codes, idempotent replays, version
+conflicts, channel split), runbook for common failures, rollback steps per phase, and the
+sign-offs required (trading ops, compliance, security, product).
+```
+
+---
+
+## Reusable review prompts
+**Code review (any phase):**
+```
+Review this diff against the netx-wove-worksheet-trading skill's safety invariants. For each
+invariant (idempotency, optimistic locking, entitlements, audit, no client trade math, decimals,
+kill switch) state: satisfied / violated / not applicable, with file:line evidence.
+```
+**Parity check:**
+```
+Here are orders produced by NetX path and Wove path for scenario <id>. Diff them field by field,
+classify each difference as bug / expected (e.g. channel field) / needs decision, and trace the root cause.
+```
+**Gate check:**
+```
+Using the gate table in the netx-wove-worksheet-trading skill, tell me whether Phase <n> is complete.
+List what's done, what's missing, and the smallest set of tasks to close the gate.
+```
+
+
+---
+
+<!-- references/testing.md -->
+
+# Reference: Testing — Scenarios, Parity, Non-functional
+
+## Scenario suite (run from NetX UI and Wove UI; results must match)
+| ID | Scenario | Expected |
+|---|---|---|
+| S01 | Single-account buy, shares, market, DAY | 1 order; identical fields both channels |
+| S02 | Buy in dollars (fractional or rounded per firm rule) | Server-computed quantity identical |
+| S03 | Sell-all of a position with pending sell | Holdings validation nets pending order |
+| S04 | Limit order outside price collar | WARNING, ack required, then submittable |
+| S05 | Restricted security | ERROR, submit blocked |
+| S06 | Insufficient buying power | ERROR with amount shortfall |
+| S07 | Mutual fund exchange within family | Correct pairing of sell/buy lines |
+| S08 | Multi-account worksheet, 50 lines | All lines validated; per-line messages |
+| S09 | Model rebalance generate | Backend-generated lines identical from both UIs |
+| S10 | Block order, pro-rata allocation with residual | Allocation + residual rule applied |
+| S11 | Submit requiring supervisory approval | PENDING_APPROVAL → approve in other UI → submitted |
+| S12 | Double-click / network retry on submit | One set of orders (idempotency) |
+| S13 | Concurrent edit NetX vs Wove | Second write gets 409; UI reload flow works |
+| S14 | Edit after validation | Status returns to DRAFT; submit blocked until revalidated |
+| S15 | Stale validation (> N sec) at submit | 422 WS_STALE_VALIDATION |
+| S16 | User without entitlement to one account on the worksheet | 403; no partial leakage of data |
+| S17 | Wove kill switch on | Wove read-only; NetX unaffected |
+| S18 | Compliance engine down | 503 WS_DOWNSTREAM_UNAVAILABLE; nothing submitted |
+| S19 | Partial submit failure (routing rejects 1 line) | Per-line status; others unaffected |
+| S20 | After market close, DAY order | Rejected or queued per firm rule, same in both |
+
+## Parity harness
+- Drive scenarios through the API with `X-Channel` set to NETX and WOVE (and through the old NetX path during Phase 3).
+- Capture the generated orders at the routing boundary (stub/record) rather than in the UI.
+- Diff field by field; allow-list only fields that are expected to differ (channel, timestamps, IDs).
+- Run in CI on every change to the facade, worksheet service, or either UI's worksheet module.
+
+## Test layers
+- **Backend:** unit (validation, state machine), contract (from OpenAPI), integration (DB, Kafka outbox, idempotency store), security (authz per route, IDOR).
+- **UI:** component tests on the shared client mocks; Playwright e2e per scenario for both UIs against a seeded test environment.
+- **Consumer-driven contracts (e.g. Pact):** Wove and NetX UI as consumers of the facade.
+
+## Non-functional checklist
+- [ ] p95 latency: validate and submit within SLO for max-size worksheet
+- [ ] Load: N concurrent users, M-line worksheets, no lock contention deadlocks
+- [ ] Idempotency store TTL ≥ max client retry window; survives node restart
+- [ ] Outbox: no lost or duplicate events on broker outage (consumers dedupe on eventId)
+- [ ] SSE/WebSocket: reconnect with last-seen version; entitlement-filtered stream
+- [ ] Audit: every command recorded with channel, user, before/after, correlation ID; retention meets policy
+- [ ] Logs redact account numbers / PII per policy
+- [ ] Authz: every route checks entitlement server-side; tested with a user of another office
+- [ ] Input limits: max lines, payload size, rate limiting per user
+- [ ] Kill switch and feature flags tested in production-like env
+- [ ] Dashboards + alerts live before pilot
+- [ ] Rollback rehearsed for each phase
